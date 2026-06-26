@@ -877,6 +877,12 @@ def get_status():
                                 config["playit_proxy"]["secretkey"] = new_key
                                 save_server_config(config)
                                 add_system_log("¡Clave secreta de Playit.gg autoguardada en Drive tras vinculación exitosa!")
+                                try:
+                                    add_system_log("Reiniciando túnel Playit.gg para cargar la clave y levantar puertos de inmediato...")
+                                    stop_tunnels()
+                                    start_playit_tunnel(config)
+                                except Exception as e:
+                                    add_system_log(f"Error al reiniciar el túnel Playit.gg: {str(e)}")
                     except Exception:
                         pass
         
@@ -1637,6 +1643,34 @@ def create_server_thread_func(server_name, server_type, version, tunnel_service=
     eula_path = os.path.join(server_dir, 'eula.txt')
     with open(eula_path, 'w') as f:
         f.write('eula=true')
+        
+    # Pre-create default server.properties for Java servers to avoid resets on first launch
+    if server_type != "bedrock":
+        properties_path = os.path.join(server_dir, 'server.properties')
+        default_props = (
+            "# Minecraft server properties\n"
+            "difficulty=easy\n"
+            "gamemode=survival\n"
+            "max-players=20\n"
+            "motd=A Minecraft Server\n"
+            "level-name=world\n"
+            "level-seed=\n"
+            "simulation-distance=10\n"
+            "view-distance=10\n"
+            "server-port=25565\n"
+            "white-list=false\n"
+            "online-mode=true\n"
+            "pvp=true\n"
+            "enable-command-block=false\n"
+            "allow-flight=false\n"
+            "spawn-npcs=true\n"
+            "allow-nether=true\n"
+        )
+        try:
+            with open(properties_path, 'w', encoding='utf-8') as f:
+                f.write(default_props)
+        except Exception as e:
+            add_system_log(f"Advertencia creando server.properties inicial: {str(e)}")
         
     # Get download URL
     url = SERVERSJAR("GetDownloadUrl", server_type, version)
