@@ -1,0 +1,29 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+.DS_Store
+
+# Temporary/Log files
+playit.txt
+zrok.txt
+ngrok_ip.txt
+localtonet.txt
+
+# Minecraft Server related (if run locally for testing)
+world/
+world_nether/
+world_the_end/
+logs/
+plugins/
+mods/
+crash-reports/
+cache/
+libraries/
+*.jar
+*.json
+*.properties
+eula.txt
+server_list.txt
+colabconfig.txt

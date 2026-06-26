@@ -1,0 +1,1720 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColabCraft Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #101420;
+            --bg-panel: #141d30;
+            --bg-card: #1c273e;
+            --bg-sidebar: #192239;
+            --border-light: rgba(255,255,255,0.08);
+            --color-primary: #2c7eff;
+            --color-primary-hover: #1b68df;
+            --color-success: #2ecc71;
+            --color-danger: #e74c3c;
+            --color-warning: #f1c40f;
+            --text-main: #f3f4f6;
+            --text-muted: #8a9fc4;
+            --font-main: 'Inter', sans-serif;
+            --font-mono: 'Fira Code', monospace;
+            --shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
+        body { background: var(--bg-dark); color: var(--text-main); font-family: var(--font-main); height: 100vh; display: flex; overflow: hidden; }
+
+        /* ===== LAYOUT ===== */
+        .wrapper { display: flex; width: 100vw; height: 100vh; }
+        .sidebar { width: 250px; background: var(--bg-sidebar); border-right: 1px solid var(--border-light); display: flex; flex-direction: column; z-index: 10; flex-shrink: 0; }
+        .brand-section { padding: 20px; display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.15); border-bottom: 1px solid var(--border-light); }
+        .brand-logo { font-weight: 800; font-size: 22px; color: #fff; display: flex; align-items: center; gap: 6px; }
+        .brand-logo span { color: var(--color-primary); }
+        .brand-sub { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; }
+        .nav-list { display: flex; flex-direction: column; padding: 12px; gap: 4px; overflow-y: auto; flex: 1; }
+        .nav-link { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 6px; font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer; transition: all 0.2s; user-select: none; }
+        .nav-link:hover { background: rgba(255,255,255,0.03); color: #fff; }
+        .nav-link.active { background: var(--color-primary); color: #fff; box-shadow: 0 4px 10px rgba(44,126,255,0.3); }
+        .nav-link svg { width: 18px; height: 18px; stroke-width: 2.2; flex-shrink: 0; }
+        .sidebar-footer { padding: 16px; border-top: 1px solid var(--border-light); background: rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 8px; }
+        .main-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; background-image: linear-gradient(185deg, #141d30 0%, #101420 100%); }
+        .top-navbar { height: 64px; background: var(--bg-panel); border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; padding: 0 32px; flex-shrink: 0; }
+        .content-area { flex: 1; padding: 32px; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; }
+
+        /* ===== TABS ===== */
+        /* Tab views are hidden by default, shown via JS by toggling display */
+        .tab-view { display: none; flex-direction: column; gap: 24px; }
+        .tab-view.active { display: flex; animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* ===== STATUS BOX ===== */
+        .cc-status-box { background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 12px; padding: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+        .cc-status-box::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--color-danger); }
+        .cc-status-box.online::before { background: var(--color-success); }
+        .cc-status-box.starting::before, .cc-status-box.stopping::before { background: var(--color-warning); }
+        .status-badge-large { font-size: 32px; font-weight: 800; color: var(--color-danger); margin-bottom: 24px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 12px; }
+        .cc-status-box.online .status-badge-large { color: var(--color-success); }
+        .cc-status-box.starting .status-badge-large, .cc-status-box.stopping .status-badge-large { color: var(--color-warning); }
+        .status-dot { width: 18px; height: 18px; background: currentColor; border-radius: 50%; display: inline-block; }
+        .status-dot.online { box-shadow: 0 0 15px var(--color-success); animation: pulse 1.8s infinite; }
+        .status-dot.starting { box-shadow: 0 0 15px var(--color-warning); animation: pulse 1s infinite; }
+
+        /* ===== BUTTONS ===== */
+        .action-buttons { display: flex; gap: 16px; width: 100%; max-width: 480px; justify-content: center; }
+        .action-btn { border: none; border-radius: 8px; padding: 14px 28px; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: all 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.2); color: #fff; }
+        .action-btn-start { background: var(--color-success); flex: 1.5; }
+        .action-btn-start:hover:not(:disabled) { background: #27ae60; transform: translateY(-1px); box-shadow: 0 6px 15px rgba(46,204,113,0.3); }
+        .action-btn-stop { background: var(--color-danger); flex: 1; }
+        .action-btn-stop:hover:not(:disabled) { background: #c0392b; transform: translateY(-1px); box-shadow: 0 6px 15px rgba(231,76,60,0.3); }
+        .action-btn-restart { background: var(--color-warning); color: #101420; flex: 1; }
+        .action-btn-restart:hover:not(:disabled) { background: #d4ac0d; transform: translateY(-1px); box-shadow: 0 6px 15px rgba(241,196,15,0.3); }
+        .action-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; color: #fff; transition: all 0.2s; }
+        .btn-secondary { background: rgba(255,255,255,0.07); border: 1px solid var(--border-light); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.12); }
+        .btn-danger { background: rgba(231,76,60,0.15); border: 1px solid rgba(231,76,60,0.3); color: var(--color-danger); }
+        .btn-danger:hover { background: rgba(231,76,60,0.25); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; width: auto; }
+
+        /* ===== FORMS ===== */
+        .form-input { width: 100%; background: rgba(255,255,255,0.06); border: 1px solid var(--border-light); border-radius: 6px; padding: 10px 14px; color: var(--text-main); font-size: 14px; font-family: var(--font-main); outline: none; transition: border-color 0.2s; }
+        .form-input:focus { border-color: var(--color-primary); }
+        .form-group { display: flex; flex-direction: column; gap: 8px; }
+        .form-label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+        select.form-input option { background: #1c273e; }
+
+        /* ===== INFO GRID ===== */
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+        .info-card { background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; transition: all 0.2s; }
+        .info-card:hover { border-color: rgba(44,126,255,0.4); transform: translateY(-1px); }
+        .info-card-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .info-card-value { font-size: 18px; font-weight: 700; color: #fff; word-break: break-all; }
+        .info-card-btn { align-self: flex-start; background: transparent; border: none; color: var(--color-primary); font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; margin-top: 4px; }
+        .info-card-btn:hover { text-decoration: underline; }
+        .resource-card { background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .meter-container { width: 100%; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+        .meter-bar { height: 100%; background: var(--color-primary); border-radius: 4px; width: 0%; transition: width 0.5s ease-out; }
+        .meter-bar.high { background: var(--color-warning); }
+        .meter-bar.danger { background: var(--color-danger); }
+
+        /* ===== CONSOLE ===== */
+        .console-view { background: #03060f; border: 1px solid var(--border-light); border-radius: 12px; display: flex; flex-direction: column; flex: 1; min-height: 480px; box-shadow: var(--shadow); }
+        .console-header { background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-light); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+        .console-title { font-size: 13px; font-weight: 600; color: var(--text-muted); font-family: var(--font-mono); }
+        .console-logs-screen { flex: 1; padding: 20px; overflow-y: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; color: #c5d0e6; }
+        .console-input-container { display: flex; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--border-light); background: rgba(0,0,0,0.2); }
+        .console-input { flex: 1; background: rgba(255,255,255,0.06); border: 1px solid var(--border-light); border-radius: 6px; padding: 10px 14px; color: #fff; font-size: 13px; font-family: var(--font-mono); outline: none; }
+        .console-input:focus { border-color: var(--color-primary); }
+        .log-line { padding: 1px 0; }
+        .log-info { color: #4ade80; }
+        .log-warn { color: #facc15; }
+        .log-error { color: #f87171; }
+        .log-system { color: #60a5fa; font-style: italic; }
+
+        /* ===== OPTIONS TAB ===== */
+        .options-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .option-switch-card { background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        .option-input-card { background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+        .option-details { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+        .option-label { font-size: 14px; font-weight: 600; color: #fff; }
+        .option-desc { font-size: 11.5px; color: var(--text-muted); }
+        .option-control-row { display: flex; gap: 10px; }
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.1); transition: .2s; border-radius: 24px; border: 1px solid var(--border-light); }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background: #fff; transition: .2s; border-radius: 50%; }
+        input:checked + .slider { background: var(--color-success); border-color: transparent; }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* ===== NETWORK CONFIG SECTION ===== */
+        .tunnel-section { background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+        .tunnel-radio-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .tunnel-radio-label { display: flex; align-items: center; gap: 8px; padding: 10px 18px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-light); border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .tunnel-radio-label:hover { border-color: var(--color-primary); }
+        .tunnel-radio-label input { accent-color: var(--color-primary); }
+        .tunnel-radio-label.selected { background: rgba(44,126,255,0.1); border-color: var(--color-primary); color: var(--color-primary); }
+        .tunnel-inputs { display: flex; flex-direction: column; gap: 12px; }
+
+        /* ===== PANEL HEADER ===== */
+        .panel-header { display: flex; flex-direction: column; gap: 6px; }
+        .panel-title { font-size: 22px; font-weight: 700; color: #fff; }
+        .panel-desc { font-size: 13.5px; color: var(--text-muted); line-height: 1.5; }
+
+        /* ===== FILES EXPLORER ===== */
+        .file-explorer { background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 8px; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+        .explorer-header { background: rgba(0,0,0,0.1); border-bottom: 1px solid var(--border-light); padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        .breadcrumb-trail { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; }
+        .breadcrumb-link { color: var(--color-primary); cursor: pointer; }
+        .breadcrumb-link:hover { text-decoration: underline; }
+        .breadcrumb-sep { color: var(--text-muted); }
+        .explorer-list { list-style: none; display: flex; flex-direction: column; max-height: 500px; overflow-y: auto; }
+        .explorer-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border-light); transition: background 0.15s; }
+        .explorer-item:last-child { border-bottom: none; }
+        .explorer-item:hover { background: rgba(255,255,255,0.02); }
+        .item-meta { display: flex; align-items: center; gap: 12px; cursor: pointer; flex: 1; }
+        .item-icon { color: var(--text-muted); }
+        .item-meta.dir .item-icon { color: var(--color-warning); }
+        .item-meta.file .item-icon { color: var(--color-primary); }
+        .item-name { font-size: 13.5px; font-weight: 500; color: #fff; }
+        .item-meta.dir .item-name { font-weight: 600; }
+        .item-actions { display: flex; align-items: center; gap: 16px; }
+        .item-size { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); min-width: 80px; text-align: right; }
+        .editor-container { display: none; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+        .editor-header { background: rgba(0,0,0,0.15); border-bottom: 1px solid var(--border-light); padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; }
+        .editor-textarea { width: 100%; height: 400px; background: #050811; border: none; color: #d1d5db; font-family: var(--font-mono); font-size: 13px; padding: 20px; outline: none; resize: vertical; line-height: 1.5; }
+
+        /* ===== PLAYERS ===== */
+        .players-panel-layout { display: grid; grid-template-columns: 240px 1fr; background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 12px; overflow: hidden; min-height: 480px; box-shadow: var(--shadow); }
+        .players-sidebar { background: rgba(0,0,0,0.15); border-right: 1px solid var(--border-light); display: flex; flex-direction: column; }
+        .players-tab-item { padding: 16px 24px; font-size: 14px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-left: 4px solid transparent; transition: all 0.2s; }
+        .players-tab-item:hover { color: #fff; background: rgba(255,255,255,0.02); }
+        .players-tab-item.active { color: var(--color-primary); background: rgba(44,126,255,0.05); border-left-color: var(--color-primary); }
+        .players-content { padding: 32px; display: flex; flex-direction: column; gap: 24px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { padding: 10px 14px; text-align: left; font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-light); }
+        td { padding: 12px 14px; font-size: 13.5px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        tr:last-child td { border-bottom: none; }
+        code { font-family: var(--font-mono); font-size: 11px; background: rgba(255,255,255,0.07); padding: 2px 6px; border-radius: 4px; color: var(--text-muted); }
+
+        /* ===== SOFTWARE ===== */
+        .software-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .software-card { background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center; cursor: pointer; transition: all 0.2s; box-shadow: var(--shadow); }
+        .software-card:hover { border-color: var(--color-primary); transform: translateY(-2px); }
+        .software-card-icon { width: 48px; height: 48px; border-radius: 8px; background: linear-gradient(135deg, var(--color-primary), #10b981); display: flex; align-items: center; justify-content: center; font-weight: bold; color: #fff; font-size: 20px; margin-bottom: 16px; }
+        .software-card-name { font-weight: 700; font-size: 15px; color: #fff; margin-bottom: 6px; }
+        .software-card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+        .software-versions-list { display: flex; flex-direction: column; gap: 12px; }
+        .software-version-item { background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; transition: background 0.15s; }
+        .software-version-item:hover { background: rgba(255,255,255,0.02); }
+
+        /* ===== BACKUPS / TOOLS ===== */
+        .tools-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .config-container { background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+        .config-title-bar { border-bottom: 1px solid var(--border-light); padding-bottom: 14px; margin-bottom: 4px; }
+        .config-title { font-size: 16px; font-weight: 700; color: #fff; }
+        .danger-zone { border-color: rgba(231,76,60,0.25) !important; background: rgba(231,76,60,0.04) !important; }
+
+        /* ===== SELECT / INPUT STYLE ===== */
+        .select-input { width: 100%; background: rgba(255,255,255,0.06); border: 1px solid var(--border-light); border-radius: 6px; padding: 8px 12px; color: var(--text-main); font-size: 13px; outline: none; cursor: pointer; }
+        .select-input:focus { border-color: var(--color-primary); }
+        .select-input option { background: #1c273e; }
+
+        /* ===== TOAST ===== */
+        .toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; border-left: 4px solid var(--color-success); color: #fff; padding: 16px 24px; border-radius: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); transform: translateY(100px); opacity: 0; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); z-index: 100; font-size: 13.5px; max-width: 360px; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+
+        /* ===== LOADER ===== */
+        .loader { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ===== MODAL ===== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(10, 14, 25, 0.85);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 480px;
+            padding: 28px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            position: relative;
+            animation: modalSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes modalSlideDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <!-- ===== SIDEBAR ===== -->
+    <div class="sidebar">
+        <div class="brand-section">
+            <div>
+                <div class="brand-logo">COLAB<span>CRAFT</span></div>
+                <div class="brand-sub">MineColab</div>
+            </div>
+        </div>
+        <div class="nav-list">
+            <div class="nav-link active" id="nav-server" onclick="switchTab('server')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+                <span>Servidor</span>
+            </div>
+            <div class="nav-link" id="nav-options" onclick="switchTab('options')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <span>Opciones</span>
+            </div>
+            <div class="nav-link" id="nav-console" onclick="switchTab('console')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span>Consola</span>
+            </div>
+            <div class="nav-link" id="nav-log" onclick="switchTab('log')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span>Registro (Log)</span>
+            </div>
+            <div class="nav-link" id="nav-players" onclick="switchTab('players')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <span>Jugadores</span>
+            </div>
+            <div class="nav-link" id="nav-software" onclick="switchTab('software')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                <span>Software</span>
+            </div>
+            <div class="nav-link" id="nav-files" onclick="switchTab('files')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                <span>Archivos</span>
+            </div>
+            <div class="nav-link" id="nav-worlds" onclick="switchTab('worlds')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 002 2h2.945M11 20.935V19a2 2 0 00-2-2h-.5a2.5 2.5 0 01-2.5-2.5V14M9 3.055a9 9 0 1112.015 12.015"/></svg>
+                <span>Mundos</span>
+            </div>
+            <div class="nav-link" id="nav-backups" onclick="switchTab('backups')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                <span>Respaldos</span>
+            </div>
+            <div class="nav-link" id="nav-network" onclick="switchTab('network')">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+                <span>Red / Túneles</span>
+            </div>
+        </div>
+        <div class="sidebar-footer">
+            <select id="serverSelect" class="select-input" onchange="changeActiveServer(this.value)">
+                <option value="">Cargando servidores...</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" style="margin-top: 6px; width: 100%; border-style: dashed; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="openCreateServerModal()">
+                <span>+ Crear Servidor</span>
+            </button>
+            <div id="panelTunnelAddress" style="font-size:10px; color:var(--text-muted); line-height:1.3; font-family:var(--font-mono); margin-top: 6px;"></div>
+        </div>
+    </div>
+
+    <!-- ===== MAIN ===== -->
+    <div class="main-container">
+        <div class="top-navbar">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <span style="font-size:13px; font-weight:600; color:var(--text-muted);">Servidor Activo:</span>
+                <span id="activeServerNameDisplay" style="font-weight:700; color:#fff; font-size:16px;">Cargando...</span>
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); font-weight:600;">ColabCraft v0.4.0 · Panel de Control</div>
+        </div>
+
+        <div class="content-area">
+
+            <!-- ===== TAB: SERVIDOR ===== -->
+            <div id="tab-server" class="tab-view active">
+                <!-- Playit Claim Warning Banner -->
+                <div id="playitClaimBanner" style="display:none; border: 1px solid #e67e22; background: rgba(230,126,34,0.1); border-radius: 8px; padding: 12px 20px; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="color:#e67e22; font-size:18px;">⚠️</span>
+                        <span style="font-size:13.5px; color:#fff;">Túnel Playit listo. Para activarlo, debes vincular este agente a tu cuenta de Playit.gg.</span>
+                    </div>
+                    <a id="playitClaimLink" href="#" target="_blank" class="btn btn-warning btn-sm" style="width:auto; background:#e67e22; color:#fff; font-weight:700; text-decoration:none; padding: 6px 12px; border-radius: 4px;">Vincular Agente</a>
+                </div>
+
+                <div id="statusCard" class="cc-status-box">
+                    <div class="status-badge-large">
+                        <span id="statusDot" class="status-dot"></span>
+                        <span id="statusText">Cargando...</span>
+                    </div>
+                    <div class="action-buttons">
+                        <button id="startBtn" class="action-btn action-btn-start" onclick="startServer()" disabled>
+                            <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Iniciar
+                        </button>
+                        <button id="restartBtn" class="action-btn action-btn-restart" onclick="restartServer()" disabled>
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3-3 3 3m-3-3v12"/></svg> Reiniciar
+                        </button>
+                        <button id="stopBtn" class="action-btn action-btn-stop" onclick="stopServer()" disabled>
+                            <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg> Detener
+                        </button>
+                    </div>
+                </div>
+                <div class="info-grid">
+                    <div class="info-card" onclick="copyIp()">
+                        <span class="info-card-label">Dirección / IP</span>
+                        <span id="ipAddress" class="info-card-value">Esperando...</span>
+                        <button class="info-card-btn">📋 Copiar IP</button>
+                    </div>
+                    <div class="info-card" onclick="switchTab('software')">
+                        <span class="info-card-label">Software</span>
+                        <span id="displaySoftware" class="info-card-value">—</span>
+                        <button class="info-card-btn">Cambiar Software →</button>
+                    </div>
+                    <div class="info-card" onclick="switchTab('software')">
+                        <span class="info-card-label">Versión</span>
+                        <span id="displayVersion" class="info-card-value">—</span>
+                        <button class="info-card-btn">Cambiar Versión →</button>
+                    </div>
+                    <div class="info-card" onclick="switchTab('players')">
+                        <span class="info-card-label">Jugadores</span>
+                        <span id="playerCount" class="info-card-value">0 / 20</span>
+                        <div class="meter-container"><div id="playerMeter" class="meter-bar" style="width:0%"></div></div>
+                    </div>
+                </div>
+                <div class="info-grid">
+                    <div class="resource-card">
+                        <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600;">
+                            <span>CPU (Colab)</span><span id="cpuVal">0%</span>
+                        </div>
+                        <div class="meter-container"><div id="cpuMeter" class="meter-bar"></div></div>
+                    </div>
+                    <div class="resource-card">
+                        <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600;">
+                            <span>RAM (Colab)</span><span id="ramVal">0 GB / 0 GB</span>
+                        </div>
+                        <div class="meter-container"><div id="ramMeter" class="meter-bar"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: OPCIONES ===== -->
+            <div id="tab-options" class="tab-view">
+                <div class="panel-header">
+                    <h2 class="panel-title">Opciones</h2>
+                    <p class="panel-desc">Configura los parámetros de <code>server.properties</code> de forma visual.</p>
+                </div>
+                <form id="optionsForm" onsubmit="saveServerProperties(event)">
+                    <div class="options-grid">
+                        <div class="option-input-card">
+                            <label class="option-label">Espacios (slots)</label>
+                            <div class="option-control-row">
+                                <input id="prop_max_players" type="number" class="form-input" style="flex:1;" min="1" max="1000">
+                            </div>
+                            <span class="option-desc">Número máximo de jugadores simultáneos.</span>
+                        </div>
+                        <div class="option-input-card">
+                            <label class="option-label">Modo de juego</label>
+                            <select id="prop_gamemode" class="form-input">
+                                <option value="survival">Supervivencia</option>
+                                <option value="creative">Creativo</option>
+                                <option value="adventure">Aventura</option>
+                                <option value="spectator">Espectador</option>
+                            </select>
+                            <span class="option-desc">El modo de juego por defecto.</span>
+                        </div>
+                        <div class="option-input-card">
+                            <label class="option-label">Dificultad</label>
+                            <select id="prop_difficulty" class="form-input">
+                                <option value="peaceful">Pacífico</option>
+                                <option value="easy">Fácil</option>
+                                <option value="normal">Normal</option>
+                                <option value="hard">Difícil</option>
+                            </select>
+                            <span class="option-desc">Nivel de daño de monstruos y hambre.</span>
+                        </div>
+                        <div class="option-switch-card">
+                            <div class="option-details">
+                                <span class="option-label">No-Premium (Cracked)</span>
+                                <span class="option-desc">Permite launchers no oficiales (online-mode=false).</span>
+                            </div>
+                            <label class="switch"><input id="prop_cracked" type="checkbox"><span class="slider"></span></label>
+                        </div>
+                        <div class="option-switch-card">
+                            <div class="option-details">
+                                <span class="option-label">Lista blanca (Whitelist)</span>
+                                <span class="option-desc">Solo jugadores listados podrán conectar.</span>
+                            </div>
+                            <label class="switch"><input id="prop_whitelist" type="checkbox"><span class="slider"></span></label>
+                        </div>
+                        <div class="option-switch-card">
+                            <div class="option-details">
+                                <span class="option-label">PVP</span>
+                                <span class="option-desc">Permite el combate entre jugadores.</span>
+                            </div>
+                            <label class="switch"><input id="prop_pvp" type="checkbox"><span class="slider"></span></label>
+                        </div>
+                        <div class="option-switch-card">
+                            <div class="option-details">
+                                <span class="option-label">Bloques de comandos</span>
+                                <span class="option-desc">Habilita los command blocks en el servidor.</span>
+                            </div>
+                            <label class="switch"><input id="prop_cmd_blocks" type="checkbox"><span class="slider"></span></label>
+                        </div>
+                        <div class="option-switch-card">
+                            <div class="option-details">
+                                <span class="option-label">Vuelo (Flight)</span>
+                                <span class="option-desc">Permite volar en supervivencia (anti-cheat bypass).</span>
+                            </div>
+                            <label class="switch"><input id="prop_flight" type="checkbox"><span class="slider"></span></label>
+                        </div>
+                        <div class="option-switch-card">
+                            <div class="option-details">
+                                <span class="option-label">Aldeanos / NPCs</span>
+                                <span class="option-desc">Habilita la generación de aldeanos.</span>
+                            </div>
+                            <label class="switch"><input id="prop_npcs" type="checkbox"><span class="slider"></span></label>
+                        </div>
+                        <div class="option-switch-card">
+                            <div class="option-details">
+                                <span class="option-label">Inframundo (Nether)</span>
+                                <span class="option-desc">Permite el acceso a la dimensión Nether.</span>
+                            </div>
+                            <label class="switch"><input id="prop_nether" type="checkbox"><span class="slider"></span></label>
+                        </div>
+                        <div class="option-input-card" style="grid-column: 1 / -1;">
+                            <label class="option-label">MOTD (Mensaje en la lista de servidores)</label>
+                            <input id="prop_motd" type="text" class="form-input">
+                            <span class="option-desc">Texto visible debajo del nombre del servidor en multijugador.</span>
+                        </div>
+                        <div class="option-input-card" style="grid-column: 1 / -1;">
+                            <label class="option-label">Nombre del Mundo (Level Name)</label>
+                            <input id="prop_level_name" type="text" class="form-input">
+                            <span class="option-desc">Nombre de la carpeta del mundo (world por defecto).</span>
+                        </div>
+                        <div class="option-input-card">
+                            <label class="option-label">Semilla del Mundo (Seed)</label>
+                            <input id="prop_seed" type="text" class="form-input">
+                            <span class="option-desc">Semilla para la generación del mapa. Vacío = aleatoria.</span>
+                        </div>
+                        <div class="option-input-card">
+                            <label class="option-label">Distancia de Simulación</label>
+                            <input id="prop_simulation_distance" type="number" class="form-input" min="2" max="32">
+                            <span class="option-desc">Chunks activos alrededor de cada jugador.</span>
+                        </div>
+                        <div class="option-input-card">
+                            <label class="option-label">Distancia de Vista (View Distance)</label>
+                            <input id="prop_view_distance" type="number" class="form-input" min="2" max="32">
+                            <span class="option-desc">Radio de chunks enviados a cada jugador.</span>
+                        </div>
+                        <div class="option-input-card">
+                            <label class="option-label">Puerto del Servidor</label>
+                            <input id="prop_server_port" type="number" class="form-input" min="1" max="65535">
+                            <span class="option-desc">Puerto TCP en el que escucha el servidor (por defecto 25565).</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; margin-top:20px;">
+                        <button type="submit" class="action-btn action-btn-start" style="width:auto; padding:12px 36px;">Guardar Opciones</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ===== TAB: CONSOLA ===== -->
+            <div id="tab-console" class="tab-view">
+                <div class="panel-header">
+                    <h2 class="panel-title">Consola en Vivo</h2>
+                    <p class="panel-desc">Envía comandos y supervisa los registros del servidor en tiempo real.</p>
+                </div>
+                <div class="console-view">
+                    <div class="console-header">
+                        <span class="console-title">stdout del servidor</span>
+                        <button class="btn btn-secondary" style="width:auto; padding:4px 10px;" onclick="clearConsole()">Limpiar</button>
+                    </div>
+                    <div id="consoleLogs" class="console-logs-screen">
+                        <div class="log-line log-system">[SISTEMA] Conectando al panel de control de MineColab...</div>
+                    </div>
+                    <div class="console-input-container">
+                        <input id="consoleInput" type="text" class="console-input" placeholder="Escribe un comando (ej: op Steve) y pulsa Enter..." onkeydown="if(event.key==='Enter') sendCommand()">
+                        <button class="btn btn-secondary" style="width:auto; padding:0 18px;" onclick="sendCommand()">Enviar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: LOG ===== -->
+            <div id="tab-log" class="tab-view">
+                <div class="panel-header">
+                    <h2 class="panel-title">Registro (Log)</h2>
+                    <p class="panel-desc">Visualiza y descarga el archivo <code>logs/latest.log</code> del servidor.</p>
+                </div>
+                <div class="console-view">
+                    <div class="console-header" style="justify-content:space-between;">
+                        <span class="console-title">logs/latest.log</span>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn btn-secondary" style="width:auto; padding:4px 12px;" onclick="reloadLatestLog()">↻ Recargar</button>
+                            <button class="btn btn-secondary" style="width:auto; padding:4px 12px;" onclick="downloadLatestLog()">⬇ Descargar</button>
+                        </div>
+                    </div>
+                    <textarea id="latestLogContent" style="font-family:var(--font-mono); font-size:12px; line-height:1.5; color:#c5d0e6; background:#03060f; border:none; padding:20px; width:100%; height:520px; resize:none; overflow-y:auto; outline:none;" readonly placeholder="Haz clic en Recargar para cargar el registro..."></textarea>
+                </div>
+            </div>
+
+            <!-- ===== TAB: JUGADORES ===== -->
+            <div id="tab-players" class="tab-view">
+                <div class="panel-header">
+                    <h2 class="panel-title">Gestión de Jugadores</h2>
+                    <p class="panel-desc">Administra Operadores (OP), Lista Blanca y Jugadores Baneados.</p>
+                </div>
+                <div class="players-panel-layout">
+                    <div class="players-sidebar">
+                        <div class="players-tab-item active" id="player-tab-ops" onclick="switchPlayerTab('ops')">Administradores (OP)</div>
+                        <div class="players-tab-item" id="player-tab-whitelist" onclick="switchPlayerTab('whitelist')">Lista Blanca (Whitelist)</div>
+                        <div class="players-tab-item" id="player-tab-banned" onclick="switchPlayerTab('banned')">Jugadores Baneados</div>
+                    </div>
+                    <div class="players-content">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3 id="playerListTitle" style="font-size:18px; color:#fff;">Operadores</h3>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="playerInputName">Nombre de usuario (Nick):</label>
+                            <div style="display:flex; gap:12px;">
+                                <input id="playerInputName" type="text" class="form-input" style="flex:1;" placeholder="ej: Steve">
+                                <button class="action-btn action-btn-start" style="width:auto; padding:10px 24px;" onclick="addPlayerToList()">Añadir</button>
+                            </div>
+                            <span class="option-desc">Si el servidor está encendido enviará el comando directamente; si está apagado, editará los archivos JSON usando Mojang API.</span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Jugador</th>
+                                        <th>UUID / XUID</th>
+                                        <th style="text-align:right;">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="playerTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: SOFTWARE ===== -->
+            <div id="tab-software" class="tab-view">
+                <!-- Panel 1: software grid -->
+                <div id="softwareSelectionPanel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">Selección de Software</h2>
+                        <p class="panel-desc">Elige el núcleo de tu servidor. Cambiar software descargará e instalará el nuevo JAR.</p>
+                    </div>
+                    <div class="software-grid" id="softwareGrid"></div>
+                </div>
+                <!-- Panel 2: version list (hidden by default) -->
+                <div id="softwareVersionsPanel" style="display:none; flex-direction:column; gap:24px;">
+                    <div class="panel-header" style="display:flex; align-items:center; gap:16px;">
+                        <button class="btn btn-secondary" style="width:auto; padding:6px 14px;" onclick="backToSoftwareList()">← Volver</button>
+                        <div>
+                            <h2 class="panel-title" id="versionViewTitle">Versiones</h2>
+                            <p class="panel-desc" id="versionViewDesc">Selecciona la versión a instalar.</p>
+                        </div>
+                    </div>
+                    <div class="software-versions-list" id="versionsContainer"></div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: ARCHIVOS ===== -->
+            <div id="tab-files" class="tab-view">
+                <div class="panel-header">
+                    <h2 class="panel-title">Explorador de Archivos</h2>
+                    <p class="panel-desc">Navega, edita y elimina archivos del servidor desde el navegador.</p>
+                </div>
+                <div class="file-explorer" id="explorerView">
+                    <div class="explorer-header">
+                        <div class="breadcrumb-trail" id="breadcrumbTrail">
+                            <span class="breadcrumb-link" onclick="loadDirectory('')">Root</span>
+                        </div>
+                        <div style="display:flex; gap:12px;">
+                            <button class="btn btn-secondary btn-sm" onclick="promptNewFolder()">+ Nueva Carpeta</button>
+                        </div>
+                    </div>
+                    <ul class="explorer-list" id="explorerList"></ul>
+                </div>
+                <div class="editor-container" id="editorView">
+                    <div class="editor-header">
+                        <span id="editorFileName" style="font-weight:600; color:#fff;">Editando...</span>
+                        <div style="display:flex; gap:12px;">
+                            <button class="btn btn-secondary" style="width:auto; padding:6px 12px;" onclick="closeFileEditor()">Cancelar</button>
+                            <button class="action-btn action-btn-start" style="width:auto; padding:6px 16px;" onclick="saveFileContent()">Guardar Cambios</button>
+                        </div>
+                    </div>
+                    <textarea class="editor-textarea" id="editorContent" spellcheck="false"></textarea>
+                </div>
+            </div>
+
+            <!-- ===== TAB: MUNDOS ===== -->
+            <div id="tab-worlds" class="tab-view">
+                <div class="panel-header">
+                    <h2 class="panel-title">Mundos</h2>
+                    <p class="panel-desc">Sube, descarga o restablece el mundo del servidor. El servidor debe estar apagado.</p>
+                </div>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:20px;">
+                    <div class="config-container" style="align-items:center; text-align:center;">
+                        <div style="font-size:40px;">📥</div>
+                        <h4 style="color:#fff; font-size:16px;">Descargar Mundo</h4>
+                        <p style="font-size:12px; color:var(--text-muted); line-height:1.5;">Comprime la carpeta <code>world</code> en un .zip y lo descarga a tu PC.</p>
+                        <button class="btn btn-secondary" style="width:100%;" onclick="downloadWorldFolder()">Descargar .zip</button>
+                    </div>
+                    <div class="config-container" style="align-items:center; text-align:center;">
+                        <div style="font-size:40px;">📤</div>
+                        <h4 style="color:#fff; font-size:16px;">Subir Mundo (.zip)</h4>
+                        <p style="font-size:12px; color:var(--text-muted); line-height:1.5;">Reemplaza el mundo actual subiendo un archivo .zip desde tu PC.</p>
+                        <input type="file" id="worldUploadFileInput" accept=".zip" style="display:none;" onchange="handleWorldUpload(event)">
+                        <button class="action-btn action-btn-start" style="width:100%; justify-content:center;" onclick="triggerWorldUpload()">Subir archivo</button>
+                    </div>
+                    <div class="config-container danger-zone" style="align-items:center; text-align:center;">
+                        <div style="font-size:40px;">🗑️</div>
+                        <h4 style="color:var(--color-danger); font-size:16px;">Restablecer Mundo</h4>
+                        <p style="font-size:12px; color:var(--text-muted); line-height:1.5;">Elimina permanentemente las carpetas de mundo para generar un mapa nuevo al iniciar.</p>
+                        <button class="btn btn-danger" style="width:100%;" onclick="resetWorldFolder()">Eliminar Mundo</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: RESPALDOS ===== -->
+            <div id="tab-backups" class="tab-view">
+                <div class="panel-header">
+                    <h2 class="panel-title">Respaldos y Herramientas</h2>
+                    <p class="panel-desc">Crea copias de seguridad en Google Drive y mantén el servidor en óptimas condiciones.</p>
+                </div>
+                <div class="tools-grid">
+                    <div class="config-container">
+                        <div class="config-title-bar">
+                            <h3 class="config-title">Copias de Seguridad (Google Drive)</h3>
+                        </div>
+                        <p style="font-size:13px; color:var(--text-muted); line-height:1.5;">Se almacenan en <code>minecraft/backup</code> de tu Google Drive.</p>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            <button class="btn btn-secondary" onclick="backupWorld()">Respaldar Mundos (world)</button>
+                            <button class="btn btn-secondary" onclick="backupServerComplete()">Respaldar Servidor Completo (.zip)</button>
+                        </div>
+                    </div>
+                    <div class="config-container">
+                        <div class="config-title-bar">
+                            <h3 class="config-title">Zona Horaria (UTC)</h3>
+                        </div>
+                        <p style="font-size:13px; color:var(--text-muted); line-height:1.5;">Configura la zona horaria de la VM de Google Colab.</p>
+                        <form onsubmit="changeTimezone(event)" style="display:flex; flex-direction:column; gap:12px;">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                                <div class="form-group">
+                                    <select id="tzArea" class="form-input" onchange="populateTimezoneZones(this.value)">
+                                        <option value="America">America</option>
+                                        <option value="Europe">Europe</option>
+                                        <option value="Asia">Asia</option>
+                                        <option value="Africa">Africa</option>
+                                        <option value="Australia">Australia</option>
+                                        <option value="Pacific">Pacific</option>
+                                        <option value="Atlantic">Atlantic</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <select id="tzZone" class="form-input"></select>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-secondary">Actualizar Zona Horaria</button>
+                        </form>
+                    </div>
+                    <div class="config-container danger-zone" style="grid-column:span 2;">
+                        <div class="config-title-bar">
+                            <h3 class="config-title" style="color:var(--color-danger);">Herramientas de Limpieza y Recuperación</h3>
+                        </div>
+                        <p style="font-size:13px; color:var(--text-muted); line-height:1.5;">Úsalas si el servidor se bloquea o queda trabado en segundo plano.</p>
+                        <div style="display:flex; justify-content:flex-end; gap:16px;">
+                            <button class="btn btn-danger" onclick="emergencyCleanup()">Liberar Puertos y Locks</button>
+                            <button class="btn btn-danger" onclick="deleteActiveServer()">Eliminar Servidor Actual</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: RED / TÚNELES ===== -->
+            <div id="tab-network" class="tab-view">
+                <div class="panel-header">
+                    <h2 class="panel-title">Red / Túneles</h2>
+                    <p class="panel-desc">Configura el servicio de túnel que permite conectarse al servidor desde internet.</p>
+                </div>
+                <form onsubmit="saveNetworkConfig(event)">
+                    <div class="tunnel-section">
+                        <div>
+                            <label class="form-label" style="margin-bottom:12px; display:block;">Servicio de Túnel Activo</label>
+                            <div class="tunnel-radio-row">
+                                <label class="tunnel-radio-label" id="lbl-playit">
+                                    <input type="radio" name="tunnelService" value="playit" onchange="toggleTunnelInputs('playit')"> Playit.gg
+                                </label>
+                                <label class="tunnel-radio-label" id="lbl-ngrok">
+                                    <input type="radio" name="tunnelService" value="ngrok" onchange="toggleTunnelInputs('ngrok')"> Ngrok
+                                </label>
+                                <label class="tunnel-radio-label" id="lbl-zrok">
+                                    <input type="radio" name="tunnelService" value="zrok" onchange="toggleTunnelInputs('zrok')"> Zrok
+                                </label>
+                                <label class="tunnel-radio-label" id="lbl-localtonet">
+                                    <input type="radio" name="tunnelService" value="localtonet" onchange="toggleTunnelInputs('localtonet')"> LocalToNet
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="playitInputs" class="tunnel-inputs">
+                            <div class="form-group">
+                                <label class="form-label">Playit.gg — Secret Key</label>
+                                <input id="playitSecret" type="text" class="form-input" placeholder="245b421e1840b1bb725a2b9a...">
+                                <span class="option-desc">Obtén la clave secreta desde <a href="https://playit.gg" target="_blank" style="color:var(--color-primary);">playit.gg</a> → Agents → tu agente → Settings.</span>
+                            </div>
+                        </div>
+                        <div id="ngrokInputs" class="tunnel-inputs" style="display:none;">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                                <div class="form-group">
+                                    <label class="form-label">Ngrok — Authtoken</label>
+                                    <input id="ngrokToken" type="text" class="form-input" placeholder="Token de Ngrok...">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Región de Ngrok</label>
+                                    <select id="ngrokRegion" class="form-input">
+                                        <option value="us">US (us)</option>
+                                        <option value="eu">Europe (eu)</option>
+                                        <option value="ap">Asia-Pacific (ap)</option>
+                                        <option value="au">Australia (au)</option>
+                                        <option value="sa">South America (sa)</option>
+                                        <option value="jp">Japan (jp)</option>
+                                        <option value="in">India (in)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="zrokInputs" class="tunnel-inputs" style="display:none;">
+                            <div class="form-group">
+                                <label class="form-label">Zrok — Authtoken</label>
+                                <input id="zrokToken" type="text" class="form-input" placeholder="Token de Zrok...">
+                            </div>
+                        </div>
+                        <div id="localtonetInputs" class="tunnel-inputs" style="display:none;">
+                            <div class="form-group">
+                                <label class="form-label">LocalToNet — Authtoken</label>
+                                <input id="localtonetToken" type="text" class="form-input" placeholder="Token de LocalToNet...">
+                            </div>
+                        </div>
+
+                        <div style="display:flex; justify-content:flex-end;">
+                            <button type="submit" class="action-btn action-btn-start" style="width:auto; padding:12px 32px;">Guardar Configuración de Red</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+        </div><!-- end content-area -->
+    </div><!-- end main-container -->
+</div><!-- end wrapper -->
+
+<div id="toast" class="toast">Guardado exitosamente.</div>
+
+<script>
+    // ============================================================
+    // STATE
+    // ============================================================
+    let logCursor = 0;
+    let isOnline = false;
+    let activeServerName = "";
+    let activeServerType = "";
+    let currentPlayerTab = "ops";
+    let currentFileDirectoryPath = "";
+    let openFileRelativePath = "";
+    let currentSoftwareType = "";
+
+    const softwareMetadata = {
+        "vanilla":  { name: "Vanilla",        desc: "El software oficial de Mojang. Sin plugins ni mods." },
+        "paper":    { name: "PaperMC",         desc: "Optimizado y de alto rendimiento. Soporta plugins Bukkit/Spigot." },
+        "purpur":   { name: "Purpur",          desc: "Basado en Paper con opciones avanzadas de personalización." },
+        "fabric":   { name: "Fabric",          desc: "Cargador de mods moderno, modular y ligero." },
+        "forge":    { name: "Forge",           desc: "La plataforma de mods tradicional más grande de Minecraft." },
+        "neoforge": { name: "NeoForge",        desc: "Variación moderna de Forge enfocada en modularidad." },
+        "bedrock":  { name: "Bedrock Edition", desc: "Servidor oficial para Pocket Edition, consolas y Win10/11." },
+        "mohist":   { name: "Mohist",          desc: "Híbrido: Plugins Bukkit + Mods Forge a la vez." },
+        "velocity": { name: "Velocity",        desc: "Proxy de alto rendimiento para múltiples servidores." },
+        "folia":    { name: "Folia",           desc: "Fork de Paper con ticking multi-hilo experimental." },
+        "purpur":   { name: "Purpur",          desc: "Paper + configuraciones adicionales de personalización." },
+    };
+
+    const timezoneCities = {
+        "America":   ["Bogota","Mexico_City","New_York","Los_Angeles","Santiago","Buenos_Aires","Lima","Caracas","Sao_Paulo","Chicago"],
+        "Europe":    ["Madrid","London","Paris","Berlin","Rome","Moscow","Kiev","Bucharest","Amsterdam"],
+        "Asia":      ["Tokyo","Seoul","Singapore","Hong_Kong","Dubai","Jakarta","Shanghai","Kolkata","Bangkok"],
+        "Africa":    ["Cairo","Johannesburg","Nairobi","Lagos","Casablanca"],
+        "Australia": ["Sydney","Melbourne","Brisbane","Perth","Adelaide"],
+        "Pacific":   ["Honolulu","Auckland","Fiji"],
+        "Atlantic":  ["Bermuda","Reykjavik","Cape_Verde"]
+    };
+
+    // ============================================================
+    // INIT
+    // ============================================================
+    document.addEventListener("DOMContentLoaded", () => {
+        fetchStats();
+        fetchServerList();
+        fetchProperties();
+        fetchNetworkConfig();
+        renderSoftwareGrid();
+        document.getElementById("tzArea").value = "America";
+        populateTimezoneZones("America");
+        document.getElementById("tzZone").value = "Bogota";
+        setInterval(fetchStats, 3000);
+        setInterval(fetchLogs, 2000);
+    });
+
+    // ============================================================
+    // TOAST
+    // ============================================================
+    function showToast(message, isError = false) {
+        const t = document.getElementById("toast");
+        t.textContent = message;
+        t.style.borderLeftColor = isError ? "var(--color-danger)" : "var(--color-success)";
+        t.classList.add("show");
+        setTimeout(() => t.classList.remove("show"), 3500);
+    }
+
+    // ============================================================
+    // TAB SWITCHING
+    // ============================================================
+    function switchTab(tabId) {
+        // Hide all top-level tab views
+        document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+
+        const view = document.getElementById(`tab-${tabId}`);
+        const link = document.getElementById(`nav-${tabId}`);
+        if (view) view.classList.add('active');
+        if (link) link.classList.add('active');
+
+        // On-enter triggers
+        if (tabId === 'players') fetchPlayersList();
+        else if (tabId === 'files') loadDirectory("");
+        else if (tabId === 'options') fetchProperties();
+        else if (tabId === 'log') reloadLatestLog();
+        else if (tabId === 'network') fetchNetworkConfig();
+    }
+
+    // ============================================================
+    // STATUS
+    // ============================================================
+    function updateUIStatus(status, playersText, mcIp, serverType, serverVersion) {
+        const card = document.getElementById("statusCard");
+        const dot  = document.getElementById("statusDot");
+        const text = document.getElementById("statusText");
+        const startBtn   = document.getElementById("startBtn");
+        const restartBtn = document.getElementById("restartBtn");
+        const stopBtn    = document.getElementById("stopBtn");
+        const ipSpan     = document.getElementById("ipAddress");
+
+        card.className = "cc-status-box";
+        dot.className  = "status-dot";
+
+        const labels = { online:"En Línea", offline:"Desconectado", starting:"Iniciando...", stopping:"Deteniendo...", updating:"Actualizando..." };
+        text.textContent = labels[status] || status.toUpperCase();
+
+        if (status === "online") {
+            card.classList.add("online"); dot.classList.add("online");
+            startBtn.disabled = true; restartBtn.disabled = false; stopBtn.disabled = false;
+            isOnline = true;
+        } else if (["starting","stopping","updating"].includes(status)) {
+            card.classList.add("starting"); dot.classList.add("starting");
+            startBtn.disabled = true; restartBtn.disabled = true; stopBtn.disabled = true;
+            isOnline = false;
+        } else {
+            startBtn.disabled = false; restartBtn.disabled = true; stopBtn.disabled = true;
+            isOnline = false;
+        }
+
+        document.getElementById("playerCount").textContent = playersText;
+        ipSpan.textContent = (mcIp && mcIp !== "Esperando...") ? mcIp : (isOnline ? "Generando IP..." : "Servidor Apagado");
+
+        if (serverType)    document.getElementById("displaySoftware").textContent = serverType.toUpperCase();
+        if (serverVersion) document.getElementById("displayVersion").textContent  = serverVersion;
+    }
+
+    async function fetchStats() {
+        try {
+            const res  = await fetch("/api/status");
+            if (!res.ok) throw new Error("backend offline");
+            const data = await res.json();
+
+            updateUIStatus(data.status, `${data.players_online} / ${data.players_max}`, data.tunnel_ip, data.active_server_type, data.active_server_version);
+
+            // Show/hide Playit claim warning banner
+            if (data.playit_claim_url) {
+                document.getElementById("playitClaimBanner").style.display = "flex";
+                document.getElementById("playitClaimLink").href = data.playit_claim_url;
+            } else {
+                document.getElementById("playitClaimBanner").style.display = "none";
+            }
+
+            // CPU
+            document.getElementById("cpuVal").textContent = `${data.cpu}%`;
+            const cm = document.getElementById("cpuMeter");
+            cm.style.width = `${data.cpu}%`;
+            cm.className = "meter-bar" + (data.cpu > 85 ? " danger" : data.cpu > 65 ? " high" : "");
+
+            // RAM
+            document.getElementById("ramVal").textContent = `${data.ram_used} GB / ${data.ram_total} GB`;
+            const rp = data.ram_total > 0 ? (data.ram_used / data.ram_total) * 100 : 0;
+            const rm = document.getElementById("ramMeter");
+            rm.style.width = `${rp}%`;
+            rm.className = "meter-bar" + (rp > 85 ? " danger" : rp > 65 ? " high" : "");
+
+            // Player bar
+            if (data.players_max > 0) {
+                document.getElementById("playerMeter").style.width = `${(data.players_online / data.players_max) * 100}%`;
+            }
+
+            if (data.panel_url) {
+                document.getElementById("panelTunnelAddress").innerHTML = `Panel URL:<br><a href="${data.panel_url}" target="_blank" style="color:var(--color-primary);text-decoration:none;">${data.panel_url}</a>`;
+            }
+
+            activeServerName = data.active_server || "Ninguno";
+            activeServerType = data.active_server_type || "";
+            document.getElementById("activeServerNameDisplay").textContent = activeServerName;
+
+        } catch (err) {
+            updateUIStatus("offline", "0 / 0", "", "", "");
+            document.getElementById("activeServerNameDisplay").textContent = "Desconectado";
+        }
+    }
+
+    // ============================================================
+    // CONSOLE LOGS
+    // ============================================================
+    async function fetchLogs() {
+        try {
+            const res  = await fetch(`/api/logs?cursor=${logCursor}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.lines || data.lines.length === 0) return;
+
+            const box = document.getElementById("consoleLogs");
+            // Clear the "connecting" placeholder on first real data
+            if (logCursor === 0 && box.children.length === 1 && box.children[0].textContent.includes("Conectando")) {
+                box.innerHTML = "";
+            }
+
+            data.lines.forEach(line => {
+                const div = document.createElement("div");
+                div.className = "log-line";
+                if (line.includes("[INFO]") || line.includes("/INFO")) {
+                    div.innerHTML = line.replace(/(\[[^\]]+\]|\/[A-Z]+)/, '<span class="log-info">$1</span>');
+                } else if (line.includes("[WARN]") || line.includes("/WARN")) {
+                    div.innerHTML = line.replace(/(\[[^\]]+\]|\/[A-Z]+)/, '<span class="log-warn">$1</span>');
+                } else if (line.includes("[ERROR]") || line.includes("/ERROR")) {
+                    div.innerHTML = line.replace(/(\[[^\]]+\]|\/[A-Z]+)/, '<span class="log-error">$1</span>');
+                } else if (line.startsWith("[SISTEMA]")) {
+                    div.innerHTML = `<span class="log-system">${line}</span>`;
+                } else {
+                    div.textContent = line;
+                }
+                box.appendChild(div);
+            });
+            logCursor = data.cursor;
+            box.scrollTop = box.scrollHeight;
+        } catch (_) {}
+    }
+
+    function clearConsole() { document.getElementById("consoleLogs").innerHTML = ""; }
+
+    // ============================================================
+    // SERVER CONTROL
+    // ============================================================
+    async function fetchServerList() {
+        try {
+            const res  = await fetch("/api/servers");
+            const data = await res.json();
+            const sel  = document.getElementById("serverSelect");
+            sel.innerHTML = "";
+            if (data.servers.length === 0) {
+                sel.innerHTML = '<option value="">Sin servidores — haz clic en + Crear Servidor</option>';
+                return;
+            }
+            data.servers.forEach(s => {
+                const o = document.createElement("option");
+                o.value = s; o.textContent = s;
+                if (s === data.active) o.selected = true;
+                sel.appendChild(o);
+            });
+        } catch (_) {}
+    }
+
+    async function changeActiveServer(serverName) {
+        if (!serverName) return;
+        try {
+            const res  = await fetch("/api/change-server", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({server_name:serverName}) });
+            const data = await res.json();
+            if (data.status === "ok") {
+                showToast(`Cambiado al servidor: ${serverName}`);
+                logCursor = 0;
+                document.getElementById("consoleLogs").innerHTML = `<div class="log-line log-system">[SISTEMA] Cambiado a: ${serverName}. Recargando datos...</div>`;
+                fetchProperties(); fetchStats();
+            } else { showToast(data.message, true); }
+        } catch (_) { showToast("Error al cambiar de servidor", true); }
+    }
+
+    async function startServer() {
+        try {
+            const res  = await fetch("/api/start", {method:"POST"});
+            const data = await res.json();
+            if (data.status === "ok") { showToast("Servidor iniciándose... revisa la Consola."); fetchStats(); }
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al iniciar el servidor", true); }
+    }
+
+    async function stopServer() {
+        try {
+            const res  = await fetch("/api/stop", {method:"POST"});
+            const data = await res.json();
+            if (data.status === "ok") { showToast("Deteniendo el servidor..."); fetchStats(); }
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al detener el servidor", true); }
+    }
+
+    async function restartServer() {
+        try {
+            const res  = await fetch("/api/restart", {method:"POST"});
+            const data = await res.json();
+            if (data.status === "ok") { showToast("Reiniciando el servidor..."); fetchStats(); }
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al reiniciar", true); }
+    }
+
+    async function sendCommand() {
+        const inp = document.getElementById("consoleInput");
+        const cmd = inp.value.trim();
+        if (!cmd) return;
+        inp.value = "";
+        try {
+            const res  = await fetch("/api/command", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({command:cmd})});
+            const data = await res.json();
+            if (data.status !== "ok") showToast(data.message, true);
+        } catch (_) { showToast("Error al enviar comando", true); }
+    }
+
+    function copyIp() {
+        const ip = document.getElementById("ipAddress").textContent;
+        if (ip && !["Esperando...","Servidor Apagado","Generando IP..."].includes(ip)) {
+            navigator.clipboard.writeText(ip).then(() => showToast("¡IP copiada!")).catch(() => showToast("No se pudo copiar.", true));
+        } else {
+            showToast("La IP no está lista.", true);
+        }
+    }
+
+    // ============================================================
+    // OPTIONS (server.properties)
+    // ============================================================
+    async function fetchProperties() {
+        try {
+            const res  = await fetch("/api/properties");
+            const data = await res.json();
+            if (data.status === "error") return;
+
+            document.getElementById("prop_difficulty").value   = data.difficulty   || "normal";
+            document.getElementById("prop_gamemode").value     = data.gamemode      || "survival";
+            document.getElementById("prop_max_players").value  = data["max-players"]|| "20";
+            document.getElementById("prop_motd").value         = data.motd          || "Un servidor de Minecraft";
+            document.getElementById("prop_level_name").value   = data["level-name"] || "world";
+            document.getElementById("prop_seed").value         = data["level-seed"]  || "";
+            document.getElementById("prop_simulation_distance").value = data["simulation-distance"] || "10";
+            document.getElementById("prop_view_distance").value       = data["view-distance"]       || "10";
+            document.getElementById("prop_server_port").value         = data["server-port"]          || "25565";
+
+            document.getElementById("prop_whitelist").checked   = data["white-list"]             === "true";
+            document.getElementById("prop_cracked").checked     = data["online-mode"]            !== "true";
+            document.getElementById("prop_pvp").checked         = data.pvp                       === "true";
+            document.getElementById("prop_cmd_blocks").checked  = data["enable-command-block"]   === "true";
+            document.getElementById("prop_flight").checked      = data["allow-flight"]           === "true";
+            document.getElementById("prop_npcs").checked        = data["spawn-npcs"]             === "true";
+            document.getElementById("prop_nether").checked      = data["allow-nether"]           === "true";
+        } catch (_) {}
+    }
+
+    async function saveServerProperties(e) {
+        e.preventDefault();
+        const props = {
+            "difficulty":            document.getElementById("prop_difficulty").value,
+            "gamemode":              document.getElementById("prop_gamemode").value,
+            "max-players":           document.getElementById("prop_max_players").value,
+            "motd":                  document.getElementById("prop_motd").value,
+            "level-name":            document.getElementById("prop_level_name").value,
+            "level-seed":            document.getElementById("prop_seed").value,
+            "simulation-distance":   document.getElementById("prop_simulation_distance").value,
+            "view-distance":         document.getElementById("prop_view_distance").value,
+            "server-port":           document.getElementById("prop_server_port").value,
+            "white-list":            document.getElementById("prop_whitelist").checked  ? "true" : "false",
+            "online-mode":           document.getElementById("prop_cracked").checked    ? "false" : "true",
+            "pvp":                   document.getElementById("prop_pvp").checked        ? "true" : "false",
+            "enable-command-block":  document.getElementById("prop_cmd_blocks").checked ? "true" : "false",
+            "allow-flight":          document.getElementById("prop_flight").checked     ? "true" : "false",
+            "spawn-npcs":            document.getElementById("prop_npcs").checked       ? "true" : "false",
+            "allow-nether":          document.getElementById("prop_nether").checked     ? "true" : "false"
+        };
+        try {
+            const res  = await fetch("/api/properties", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(props)});
+            const data = await res.json();
+            if (data.status === "ok") showToast("Propiedades guardadas correctamente.");
+            else showToast(data.message, true);
+        } catch (_) { showToast("Fallo al guardar propiedades.", true); }
+    }
+
+    // ============================================================
+    // NETWORK / TUNNELS
+    // ============================================================
+    function toggleTunnelInputs(service) {
+        ["playit","ngrok","zrok","localtonet"].forEach(s => {
+            document.getElementById(`${s}Inputs`).style.display = s === service ? "flex" : "none";
+            const lbl = document.getElementById(`lbl-${s}`);
+            if (lbl) lbl.classList.toggle("selected", s === service);
+        });
+    }
+
+    async function fetchNetworkConfig() {
+        try {
+            const res  = await fetch("/api/network-config");
+            const data = await res.json();
+            const svc  = data.tunnel_service || "playit";
+
+            // select the right radio
+            const radios = document.querySelectorAll('input[name="tunnelService"]');
+            radios.forEach(r => { if (r.value === svc) r.checked = true; });
+
+            document.getElementById("playitSecret").value    = data.playit_secret    || "";
+            document.getElementById("ngrokToken").value      = data.ngrok_token      || "";
+            document.getElementById("ngrokRegion").value     = data.ngrok_region     || "us";
+            document.getElementById("zrokToken").value       = data.zrok_token       || "";
+            document.getElementById("localtonetToken").value = data.localtonet_token || "";
+            toggleTunnelInputs(svc);
+        } catch (_) {}
+    }
+
+    async function saveNetworkConfig(e) {
+        e.preventDefault();
+        const svc = document.querySelector('input[name="tunnelService"]:checked')?.value || "playit";
+        const payload = {
+            tunnel_service:   svc,
+            playit_secret:    document.getElementById("playitSecret").value,
+            ngrok_token:      document.getElementById("ngrokToken").value,
+            ngrok_region:     document.getElementById("ngrokRegion").value,
+            zrok_token:       document.getElementById("zrokToken").value,
+            localtonet_token: document.getElementById("localtonetToken").value
+        };
+        try {
+            const res  = await fetch("/api/network-config", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)});
+            const data = await res.json();
+            if (data.status === "ok") { showToast("Configuración de red guardada."); fetchStats(); }
+            else showToast(data.message, true);
+        } catch (_) { showToast("Fallo al guardar configuración de red.", true); }
+    }
+
+    // ============================================================
+    // PLAYERS
+    // ============================================================
+    function switchPlayerTab(tabName) {
+        currentPlayerTab = tabName;
+        document.querySelectorAll('.players-tab-item').forEach(el => el.classList.remove('active'));
+        document.getElementById(`player-tab-${tabName}`).classList.add('active');
+        const titles = { ops:"Administradores (OP)", whitelist:"Lista Blanca (Whitelist)", banned:"Jugadores Baneados" };
+        document.getElementById("playerListTitle").textContent = titles[tabName];
+        fetchPlayersList();
+    }
+
+    async function fetchPlayersList() {
+        try {
+            const res  = await fetch("/api/players/lists");
+            const data = await res.json();
+            const tbody = document.getElementById("playerTableBody");
+            tbody.innerHTML = "";
+            let list = data[currentPlayerTab] || [];
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:20px;">No hay jugadores en esta lista.</td></tr>';
+                return;
+            }
+            list.forEach(p => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${p.name || 'Desconocido'}</td>
+                    <td><code>${p.uuid || p.xuid || 'N/A'}</code></td>
+                    <td style="text-align:right;">
+                        <button class="btn btn-danger btn-sm" onclick="removePlayerFromList('${(p.name||'').replace(/'/g,"\\'")}', '${p.uuid || p.xuid || ''}')">Remover</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (_) {}
+    }
+
+    async function addPlayerToList() {
+        const inp = document.getElementById("playerInputName");
+        const name = inp.value.trim();
+        if (!name) return;
+        inp.value = "";
+        try {
+            const res  = await fetch("/api/players/add", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({list_name:currentPlayerTab, player_name:name})});
+            const data = await res.json();
+            if (data.status === "ok") { showToast(`Jugador '${name}' agregado.`); fetchPlayersList(); }
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al registrar jugador.", true); }
+    }
+
+    async function removePlayerFromList(name, uuid) {
+        if (!confirm(`¿Quitar a '${name}' de la lista?`)) return;
+        try {
+            const res  = await fetch("/api/players/remove", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({list_name:currentPlayerTab, player_name:name, uuid})});
+            const data = await res.json();
+            if (data.status === "ok") { showToast(`Jugador '${name}' removido.`); fetchPlayersList(); }
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al remover jugador.", true); }
+    }
+
+    // ============================================================
+    // SOFTWARE & VERSIONS
+    // ============================================================
+    function renderSoftwareGrid() {
+        const grid = document.getElementById("softwareGrid");
+        grid.innerHTML = "";
+        Object.entries(softwareMetadata).forEach(([type, info]) => {
+            const card = document.createElement("div");
+            card.className = "software-card";
+            card.onclick = () => loadSoftwareVersions(type);
+            card.innerHTML = `
+                <div class="software-card-icon">${info.name.substring(0,2).toUpperCase()}</div>
+                <div class="software-card-name">${info.name}</div>
+                <div class="software-card-desc">${info.desc}</div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    function backToSoftwareList() {
+        document.getElementById("softwareSelectionPanel").style.display = "block";
+        document.getElementById("softwareVersionsPanel").style.display = "none";
+    }
+
+    async function loadSoftwareVersions(type) {
+        currentSoftwareType = type;
+        const selPanel = document.getElementById("softwareSelectionPanel");
+        const verPanel = document.getElementById("softwareVersionsPanel");
+        selPanel.style.display = "none";
+        verPanel.style.display = "flex";
+
+        const info = softwareMetadata[type] || { name: type };
+        document.getElementById("versionViewTitle").textContent = `Versiones de ${info.name}`;
+        document.getElementById("versionViewDesc").textContent  = `Elige una versión de ${info.name} para instalar en el servidor.`;
+
+        const container = document.getElementById("versionsContainer");
+        container.innerHTML = '<div style="text-align:center; padding:32px; color:var(--text-muted);">Cargando versiones... <span class="loader"></span></div>';
+
+        try {
+            const res = await fetch(`/api/versions?server_type=${type}`);
+            const versions = await res.json();
+            container.innerHTML = "";
+            if (versions.length === 0) {
+                container.innerHTML = '<div style="text-align:center; padding:32px; color:var(--text-muted);">No se encontraron versiones disponibles.</div>';
+                return;
+            }
+            versions.forEach(v => {
+                const row = document.createElement("div");
+                row.className = "software-version-item";
+                row.innerHTML = `
+                    <span style="font-weight:600; font-size:14.5px; color:#fff;">${info.name} ${v}</span>
+                    <button class="action-btn action-btn-start btn-sm" onclick="installSoftware('${type}', '${v}')">Instalar</button>
+                `;
+                container.appendChild(row);
+            });
+        } catch (_) {
+            container.innerHTML = '<div style="text-align:center; padding:32px; color:var(--color-danger);">Error al cargar versiones. Verifica tu conexión.</div>';
+        }
+    }
+
+    async function installSoftware(type, version) {
+        const activeServer = document.getElementById("serverSelect").value;
+        if (!activeServer) {
+            const name = prompt("No hay servidor activo. Escribe un nombre para crear uno:");
+            if (!name || !name.trim()) return;
+            createServerInstance(name.trim(), type, version);
+            return;
+        }
+        if (!confirm(`¿Instalar ${type.toUpperCase()} v${version} en el servidor '${activeServer}'?\n\n¡Se sobrescribirán los archivos del núcleo del servidor!`)) return;
+        createServerInstance(activeServer, type, version);
+    }
+
+    async function createServerInstance(name, type, version) {
+        showToast("Iniciando descarga e instalación. Revisa la Consola...");
+        switchTab("console");
+        try {
+            const res  = await fetch("/api/create-server", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({server_name:name, server_type:type, server_version:version})});
+            const data = await res.json();
+            if (data.status === "ok") { showToast(data.message); setTimeout(fetchServerList, 2000); }
+            else showToast(data.message, true);
+        } catch (_) { showToast("Fallo al iniciar el instalador.", true); }
+    }
+
+    // ============================================================
+    // FILE EXPLORER
+    // ============================================================
+    async function loadDirectory(path) {
+        currentFileDirectoryPath = path;
+        const list  = document.getElementById("explorerList");
+        const trail = document.getElementById("breadcrumbTrail");
+
+        trail.innerHTML = `<span class="breadcrumb-link" onclick="loadDirectory('')">Root</span>`;
+        const parts = path.split("/").filter(Boolean);
+        let accum = "";
+        parts.forEach(p => {
+            accum += (accum ? "/" : "") + p;
+            const target = accum;
+            trail.innerHTML += ` <span class="breadcrumb-sep">/</span> <span class="breadcrumb-link" onclick="loadDirectory('${target}')">${p}</span>`;
+        });
+
+        list.innerHTML = '<li style="text-align:center; padding:24px; color:var(--text-muted);">Cargando... <span class="loader"></span></li>';
+
+        try {
+            const res  = await fetch(`/api/files/list?path=${encodeURIComponent(path)}`);
+            const data = await res.json();
+            list.innerHTML = "";
+
+            if (data.status !== "ok") {
+                list.innerHTML = `<li style="padding:16px; color:var(--color-danger); text-align:center;">${data.message}</li>`;
+                return;
+            }
+
+            if (path) {
+                const parentPath = parts.slice(0,-1).join("/");
+                const li = document.createElement("li");
+                li.className = "explorer-item";
+                li.innerHTML = `<div class="item-meta dir" onclick="loadDirectory('${parentPath}')"><span class="item-icon">📁</span><span class="item-name">.. (subir nivel)</span></div>`;
+                list.appendChild(li);
+            }
+
+            if (data.items.length === 0) {
+                list.innerHTML += '<li style="text-align:center; padding:20px; color:var(--text-muted);">Directorio vacío.</li>';
+                return;
+            }
+
+            data.items.forEach(item => {
+                const li = document.createElement("li");
+                li.className = "explorer-item";
+                const relPath = path ? `${path}/${item.name}` : item.name;
+                if (item.is_dir) {
+                    li.innerHTML = `
+                        <div class="item-meta dir" onclick="loadDirectory('${relPath}')">
+                            <span class="item-icon">📁</span>
+                            <span class="item-name">${item.name}</span>
+                        </div>
+                        <div class="item-actions">
+                            <button class="btn btn-danger btn-sm" onclick="deleteFileExplorerItem('${relPath}')">Eliminar</button>
+                        </div>`;
+                } else {
+                    const sizeKB = Math.round((item.size / 1024) * 10) / 10;
+                    li.innerHTML = `
+                        <div class="item-meta file" onclick="openFileInEditor('${relPath}')">
+                            <span class="item-icon">📄</span>
+                            <span class="item-name">${item.name}</span>
+                        </div>
+                        <div class="item-actions">
+                            <span class="item-size">${sizeKB} KB</span>
+                            <button class="btn btn-danger btn-sm" onclick="deleteFileExplorerItem('${relPath}')">Eliminar</button>
+                        </div>`;
+                }
+                list.appendChild(li);
+            });
+        } catch (_) {
+            list.innerHTML = '<li style="padding:16px; color:var(--color-danger); text-align:center;">Error de red al cargar el directorio.</li>';
+        }
+    }
+
+    async function openFileInEditor(filePath) {
+        openFileRelativePath = filePath;
+        document.getElementById("editorFileName").textContent = `Editando: ${filePath}`;
+        document.getElementById("editorContent").value = "Cargando archivo...";
+        document.getElementById("explorerView").style.display = "none";
+        document.getElementById("editorView").style.display   = "flex";
+
+        try {
+            const res  = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+            const data = await res.json();
+            if (data.status === "ok") {
+                document.getElementById("editorContent").value = data.content;
+            } else {
+                alert(`Error: ${data.message}`);
+                closeFileEditor();
+            }
+        } catch (_) { alert("Error de conexión al cargar el archivo."); closeFileEditor(); }
+    }
+
+    function closeFileEditor() {
+        document.getElementById("editorView").style.display   = "none";
+        document.getElementById("explorerView").style.display = "flex";
+        openFileRelativePath = "";
+    }
+
+    async function saveFileContent() {
+        const content = document.getElementById("editorContent").value;
+        try {
+            const res  = await fetch("/api/files/write", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:openFileRelativePath, content})});
+            const data = await res.json();
+            if (data.status === "ok") { showToast("Archivo guardado."); closeFileEditor(); loadDirectory(currentFileDirectoryPath); }
+            else alert(`Error: ${data.message}`);
+        } catch (_) { alert("Error al guardar el archivo."); }
+    }
+
+    async function deleteFileExplorerItem(filePath) {
+        if (!confirm(`¿Borrar permanentemente '${filePath}'?`)) return;
+        try {
+            const res  = await fetch("/api/files/delete", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:filePath})});
+            const data = await res.json();
+            if (data.status === "ok") { showToast("Elemento eliminado."); loadDirectory(currentFileDirectoryPath); }
+            else alert(`Error: ${data.message}`);
+        } catch (_) { alert("Error al eliminar."); }
+    }
+
+    async function promptNewFolder() {
+        const name = prompt("Nombre de la nueva carpeta:");
+        if (!name) return;
+        try {
+            const res  = await fetch("/api/files/create-folder", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:currentFileDirectoryPath, folder_name:name.trim()})});
+            const data = await res.json();
+            if (data.status === "ok") { showToast("Carpeta creada."); loadDirectory(currentFileDirectoryPath); }
+            else alert(`Error: ${data.message}`);
+        } catch (_) { alert("Error de conexión."); }
+    }
+
+    // ============================================================
+    // BACKUPS, TIMEZONE, EMERGENCY
+    // ============================================================
+    async function backupWorld() {
+        showToast("Iniciando copia de seguridad del mundo...");
+        try {
+            const res  = await fetch("/api/backup-world", {method:"POST"});
+            const data = await res.json();
+            if (data.status === "ok") showToast(`Copia creada: ${data.backup_path}`);
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al respaldar.", true); }
+    }
+
+    async function backupServerComplete() {
+        showToast("Comprimiendo servidor completo. Puede tardar varios minutos...");
+        try {
+            const res  = await fetch("/api/backup-server", {method:"POST"});
+            const data = await res.json();
+            if (data.status === "ok") showToast(`ZIP en Drive: ${data.backup_path}`);
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al respaldar.", true); }
+    }
+
+    function populateTimezoneZones(area) {
+        const sel = document.getElementById("tzZone");
+        sel.innerHTML = "";
+        (timezoneCities[area] || []).forEach(z => {
+            const o = document.createElement("option");
+            o.value = z; o.textContent = z; sel.appendChild(o);
+        });
+    }
+
+    async function changeTimezone(e) {
+        e.preventDefault();
+        const area = document.getElementById("tzArea").value;
+        const zone = document.getElementById("tzZone").value;
+        if (!area || !zone) return;
+        try {
+            const res  = await fetch("/api/timezone", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({area, zone})});
+            const data = await res.json();
+            if (data.status === "ok") showToast(`Zona horaria actualizada: ${data.new_time}`);
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al cambiar zona horaria.", true); }
+    }
+
+    async function emergencyCleanup() {
+        if (!confirm("¿Liberar puertos y eliminar locks de sesión?")) return;
+        try {
+            const res  = await fetch("/api/emergency-cleanup", {method:"POST"});
+            const data = await res.json();
+            if (data.status === "ok") showToast("Limpieza de emergencia completada.");
+            else showToast("Error en la limpieza.", true);
+        } catch (_) { showToast("Error de comunicación.", true); }
+    }
+
+    async function deleteActiveServer() {
+        const active = document.getElementById("serverSelect").value;
+        if (!active) return;
+        if (!confirm(`¿Borrar PERMANENTEMENTE el servidor '${active}' de tu Drive?\n\nEsta acción NO se puede deshacer.`)) return;
+        try {
+            const res  = await fetch("/api/delete-server", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({server_name:active})});
+            const data = await res.json();
+            if (data.status === "ok") { showToast(`Servidor '${active}' eliminado.`); fetchServerList(); fetchStats(); switchTab("server"); }
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al eliminar el servidor.", true); }
+    }
+
+    // ============================================================
+    // LOG TAB
+    // ============================================================
+    async function reloadLatestLog() {
+        const ta = document.getElementById("latestLogContent");
+        ta.value = "Cargando logs/latest.log...";
+        try {
+            const res  = await fetch("/api/log/read");
+            const data = await res.json();
+            if (data.status === "ok") { ta.value = data.content; ta.scrollTop = ta.scrollHeight; }
+            else { ta.value = `Error: ${data.message}`; showToast(data.message, true); }
+        } catch (_) { ta.value = "Error de conexión."; showToast("Error al leer logs.", true); }
+    }
+
+    function downloadLatestLog() {
+        const active = document.getElementById("serverSelect").value;
+        if (!active) { showToast("No hay servidor seleccionado.", true); return; }
+        window.open("/api/log/download", "_blank");
+        showToast("Descarga iniciada.");
+    }
+
+    // ============================================================
+    // WORLDS TAB
+    // ============================================================
+    function downloadWorldFolder() {
+        const active = document.getElementById("serverSelect").value;
+        if (!active) { showToast("No hay servidor seleccionado.", true); return; }
+        showToast("Generando .zip del mundo. Por favor espera...");
+        window.open("/api/worlds/download", "_blank");
+    }
+
+    function triggerWorldUpload() {
+        if (isOnline) { showToast("Apaga el servidor antes de subir un mundo.", true); return; }
+        document.getElementById("worldUploadFileInput").click();
+    }
+
+    async function handleWorldUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        if (!confirm(`¿Subir '${file.name}'? Esto REEMPLAZARÁ el mundo actual permanentemente.`)) { event.target.value = ""; return; }
+        showToast("Subiendo y descomprimiendo el mundo...");
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+            const res  = await fetch("/api/worlds/upload", {method:"POST", body:formData});
+            const data = await res.json();
+            if (data.status === "ok") showToast("Mundo subido y extraído exitosamente.");
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al subir el mundo.", true); }
+        finally { event.target.value = ""; }
+    }
+
+    async function resetWorldFolder() {
+        if (isOnline) { showToast("Apaga el servidor antes de restablecer el mundo.", true); return; }
+        if (!confirm("¿Eliminar permanentemente las carpetas de mundo (world, world_nether, world_the_end)?\n\nEsta acción NO se puede deshacer.")) return;
+        try {
+            const res  = await fetch("/api/worlds/reset", {method:"POST"});
+            const data = await res.json();
+            if (data.status === "ok") showToast(data.message);
+            else showToast(data.message, true);
+        } catch (_) { showToast("Error al restablecer el mundo.", true); }
+    }
+
+    // ============================================================
+    // DYNAMIC SERVER CREATION
+    // ============================================================
+    async function openCreateServerModal() {
+        document.getElementById("newServerName").value = "";
+        const typeSelect = document.getElementById("newServerType");
+        typeSelect.innerHTML = '<option value="">Cargando tipos...</option>';
+        const verSelect = document.getElementById("newServerVersion");
+        verSelect.innerHTML = '<option value="">Selecciona tipo primero...</option>';
+        verSelect.disabled = true;
+        document.getElementById("createServerModal").style.display = "flex";
+        
+        try {
+            const res = await fetch("/api/server-types");
+            const types = await res.json();
+            typeSelect.innerHTML = '<option value="">Selecciona tipo...</option>';
+            types.forEach(t => {
+                const o = document.createElement("option");
+                o.value = t.toLowerCase();
+                o.textContent = t;
+                typeSelect.appendChild(o);
+            });
+        } catch (_) {
+            typeSelect.innerHTML = '<option value="">Error cargando tipos</option>';
+        }
+    }
+
+    async function loadNewServerVersions(type) {
+        const verSelect = document.getElementById("newServerVersion");
+        if (!type) {
+            verSelect.innerHTML = '<option value="">Selecciona tipo primero...</option>';
+            verSelect.disabled = true;
+            return;
+        }
+        verSelect.innerHTML = '<option value="">Cargando versiones...</option>';
+        verSelect.disabled = true;
+        try {
+            const res = await fetch(`/api/versions?server_type=${type}`);
+            const versions = await res.json();
+            verSelect.innerHTML = '<option value="">Selecciona versión...</option>';
+            versions.forEach(v => {
+                const o = document.createElement("option");
+                o.value = v;
+                o.textContent = v;
+                verSelect.appendChild(o);
+            });
+            verSelect.disabled = false;
+        } catch (_) {
+            verSelect.innerHTML = '<option value="">Error cargando versiones</option>';
+        }
+    }
+
+    function closeCreateServerModal() {
+        document.getElementById("createServerModal").style.display = "none";
+    }
+
+    async function submitCreateServer() {
+        const name = document.getElementById("newServerName").value.trim().replace(/\s+/g, '_');
+        const type = document.getElementById("newServerType").value;
+        const version = document.getElementById("newServerVersion").value;
+        
+        if (!name) {
+            showToast("Por favor, ingresa un nombre para el servidor.", true);
+            return;
+        }
+        if (!/^[a-zA-Z0-9_\-]+$/.test(name)) {
+            showToast("Nombre inválido. Usa solo letras, números, guiones y guiones bajos.", true);
+            return;
+        }
+        if (!type) {
+            showToast("Por favor, selecciona un tipo de servidor.", true);
+            return;
+        }
+        if (!version) {
+            showToast("Por favor, selecciona una versión.", true);
+            return;
+        }
+        
+        closeCreateServerModal();
+        createServerInstance(name, type, version);
+    }
+</script>
+
+<!-- ===== MODAL: CREAR SERVIDOR ===== -->
+<div id="createServerModal" class="modal-overlay" onclick="if(event.target===this) closeCreateServerModal()">
+    <div class="modal-content">
+        <h3 style="color:#fff; font-size:18px; font-weight:700; border-bottom:1px solid var(--border-light); padding-bottom:12px; margin-bottom: 4px;">Crear Nuevo Servidor</h3>
+        
+        <div class="form-group">
+            <label class="form-label">Nombre del Servidor</label>
+            <input type="text" id="newServerName" class="form-input" placeholder="Mi_Servidor_Minecraft" required>
+            <span style="font-size:11px; color:var(--text-muted);">Solo letras, números, guiones y guiones bajos (sin espacios).</span>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Tipo de Servidor (Software)</label>
+            <select id="newServerType" class="form-input" onchange="loadNewServerVersions(this.value)">
+                <option value="">Selecciona tipo...</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Versión de Minecraft</label>
+            <select id="newServerVersion" class="form-input" disabled>
+                <option value="">Selecciona tipo primero...</option>
+            </select>
+        </div>
+        
+        <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:8px;">
+            <button class="btn btn-secondary" style="width:auto; padding:10px 18px;" onclick="closeCreateServerModal()">Cancelar</button>
+            <button class="btn btn-primary" style="width:auto; padding:10px 18px; background:var(--color-primary);" onclick="submitCreateServer()">Crear Servidor</button>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
