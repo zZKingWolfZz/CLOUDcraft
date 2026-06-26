@@ -35,6 +35,7 @@ server_status = "offline"  # offline, starting, online, stopping, updating
 active_server = ""
 session_logs = []  # Single unified log cache for the current session (replaces system_logs + latest.log reading)
 log_thread = None
+online_players = []
 
 # Create logs dir if not exists
 os.makedirs(LOGS_DIR, exist_ok=True)
@@ -653,7 +654,7 @@ def get_tunnel_ip():
 
 # --- Minecraft Process Runner ---
 def monitor_mc_output():
-    global mc_process, server_status, active_server
+    global mc_process, server_status, active_server, online_players
     if not mc_process:
         return
     
@@ -680,6 +681,47 @@ def monitor_mc_output():
             # Add to session_logs directly
             if clean_line:
                 session_logs.append(clean_line)
+                
+            # Parse players connected/disconnected
+            # Java joined
+            if "joined the game" in clean_line:
+                line_msg = clean_line
+                if "]: " in line_msg:
+                    line_msg = line_msg.split("]: ", 1)[1]
+                player = line_msg.split(" joined the game")[0].strip()
+                player = re.sub(r'[^a-zA-Z0-9_]', '', player)
+                if player and player not in online_players:
+                    online_players.append(player)
+                    add_system_log(f"Jugador conectado: {player}")
+            
+            # Java left
+            elif "left the game" in clean_line:
+                line_msg = clean_line
+                if "]: " in line_msg:
+                    line_msg = line_msg.split("]: ", 1)[1]
+                player = line_msg.split(" left the game")[0].strip()
+                player = re.sub(r'[^a-zA-Z0-9_]', '', player)
+                if player in online_players:
+                    online_players.remove(player)
+                    add_system_log(f"Jugador desconectado: {player}")
+
+            # Bedrock connected
+            elif "Player connected:" in clean_line:
+                match = re.search(r'Player connected:\s*([^,]+)', clean_line)
+                if match:
+                    player = match.group(1).strip()
+                    if player and player not in online_players:
+                        online_players.append(player)
+                        add_system_log(f"Jugador Bedrock conectado: {player}")
+
+            # Bedrock disconnected
+            elif "Player disconnected:" in clean_line:
+                match = re.search(r'Player disconnected:\s*([^,]+)', clean_line)
+                if match:
+                    player = match.group(1).strip()
+                    if player in online_players:
+                        online_players.remove(player)
+                        add_system_log(f"Jugador Bedrock desconectado: {player}")
                 
             # Detect UnsupportedClassVersionError
             if "UnsupportedClassVersionError" in clean_line:
@@ -878,7 +920,7 @@ def get_logs():
     })
 
 def start_mc_process_internal():
-    global mc_process, server_status, active_server, log_thread, session_logs
+    global mc_process, server_status, active_server, log_thread, session_logs, online_players
     
     config = load_server_config()
     active_server = config.get("server_in_use", "")
@@ -888,6 +930,7 @@ def start_mc_process_internal():
         return False
         
     server_status = "starting"
+    online_players = []
     
     # 1. Free ports
     free_minecraft_ports()
@@ -1478,7 +1521,7 @@ def SERVERSJAR(command, server_type=None, version=None):
 
 creation_in_progress = False
 
-def create_server_thread_func(server_name, server_type, version):
+def create_server_thread_func(server_name, server_type, version, tunnel_service="playit"):
     global creation_in_progress, session_logs, active_server
     creation_in_progress = True
     
@@ -1492,7 +1535,7 @@ def create_server_thread_func(server_name, server_type, version):
     colabconfig = {
         "server_type": server_type,
         "server_version": version.split("-")[0].strip(),
-        "tunnel_service": "playit"
+        "tunnel_service": tunnel_service
     }
     with open(get_colab_config_path(server_name), 'w') as f:
         json.dump(colabconfig, f, indent=4)
@@ -1618,6 +1661,7 @@ def create_server_endpoint():
     server_name = data.get("server_name", "").strip().replace(" ", "_")
     server_type = data.get("server_type", "").strip().lower()
     server_version = data.get("server_version", "").strip()
+    tunnel_service = data.get("tunnel_service", "playit").strip()
     
     if not server_name or not server_type or not server_version:
         return jsonify({"status": "error", "message": "Faltan parámetros requeridos (nombre, tipo o versión)."})
@@ -1631,10 +1675,35 @@ def create_server_endpoint():
     if os.path.exists(server_dir) and os.listdir(server_dir):
         return jsonify({"status": "error", "message": f"El servidor '{server_name}' ya existe y no está vacío."})
         
+    # Save network settings if provided
+    config = load_server_config()
+    if "playit_proxy" not in config: config["playit_proxy"] = {}
+    if "ngrok_proxy" not in config: config["ngrok_proxy"] = {}
+    if "zrok_proxy" not in config: config["zrok_proxy"] = {}
+    if "localtonet_proxy" not in config: config["localtonet_proxy"] = {}
+    
+    playit_secret = data.get("playit_secret", "").strip()
+    ngrok_token = data.get("ngrok_token", "").strip()
+    ngrok_region = data.get("ngrok_region", "us").strip()
+    zrok_token = data.get("zrok_token", "").strip()
+    localtonet_token = data.get("localtonet_token", "").strip()
+    
+    if playit_secret:
+        config["playit_proxy"]["secretkey"] = playit_secret
+    if ngrok_token:
+        config["ngrok_proxy"]["authtoken"] = ngrok_token
+        config["ngrok_proxy"]["region"] = ngrok_region
+    if zrok_token:
+        config["zrok_proxy"]["authtoken"] = zrok_token
+    if localtonet_token:
+        config["localtonet_proxy"]["authtoken"] = localtonet_token
+        
+    save_server_config(config)
+    
     # Start thread
     threading.Thread(
         target=create_server_thread_func,
-        args=(server_name, server_type, server_version),
+        args=(server_name, server_type, server_version, tunnel_service),
         daemon=True
     ).start()
     
@@ -2140,11 +2209,57 @@ def get_player_lists():
         if wl_bedrock and len(wl_bedrock) > 0 and "xuid" in wl_bedrock[0]:
             whitelist = [{"name": item.get("name"), "uuid": item.get("xuid")} for item in wl_bedrock]
             
+    # Fetch online list
+    global online_players, server_status
+    current_online = []
+    if server_status == "online":
+        # Check/sync with mcstatus if Java
+        try:
+            from mcstatus import JavaServer
+            server = JavaServer.lookup("127.0.0.1:25565")
+            query = server.status()
+            if query.players.sample:
+                query_names = [p.name for p in query.players.sample if p.name]
+                for name in query_names:
+                    if name not in online_players:
+                        online_players.append(name)
+                # Filter out players not in query (only if query list is non-empty)
+                if query_names:
+                    online_players = [p for p in online_players if p in query_names]
+        except Exception:
+            pass
+        current_online = [{"name": name, "uuid": "Conectado"} for name in online_players]
+        
     return jsonify({
         "ops": ops,
         "whitelist": whitelist,
-        "banned": banned
+        "banned": banned,
+        "online": current_online
     })
+
+@app.route('/api/players/kick', methods=['POST'])
+def kick_player():
+    global mc_process, server_status, online_players
+    if not mc_process or mc_process.poll() is not None:
+        return jsonify({"status": "error", "message": "El servidor no está encendido."})
+        
+    data = request.json
+    player_name = data.get("player_name", "").strip()
+    reason = data.get("reason", "Expulsado desde el Panel Web").strip()
+    
+    if not player_name:
+        return jsonify({"status": "error", "message": "Nombre de jugador inválido."})
+        
+    try:
+        add_system_log(f"Expulsando jugador: {player_name}")
+        mc_process.stdin.write(f"kick {player_name} {reason}\n")
+        mc_process.stdin.flush()
+        # Remove from online list immediately as precaution
+        if player_name in online_players:
+            online_players.remove(player_name)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Error al enviar comando kick: {str(e)}"})
 
 @app.route('/api/players/add', methods=['POST'])
 def add_player_to_list():

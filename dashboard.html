@@ -547,19 +547,20 @@
             <div id="tab-players" class="tab-view">
                 <div class="panel-header">
                     <h2 class="panel-title">Gestión de Jugadores</h2>
-                    <p class="panel-desc">Administra Operadores (OP), Lista Blanca y Jugadores Baneados.</p>
+                    <p class="panel-desc">Administra jugadores conectados, Operadores (OP), Lista Blanca y Jugadores Baneados.</p>
                 </div>
                 <div class="players-panel-layout">
                     <div class="players-sidebar">
-                        <div class="players-tab-item active" id="player-tab-ops" onclick="switchPlayerTab('ops')">Administradores (OP)</div>
+                        <div class="players-tab-item active" id="player-tab-online" onclick="switchPlayerTab('online')">Jugadores Conectados</div>
+                        <div class="players-tab-item" id="player-tab-ops" onclick="switchPlayerTab('ops')">Administradores (OP)</div>
                         <div class="players-tab-item" id="player-tab-whitelist" onclick="switchPlayerTab('whitelist')">Lista Blanca (Whitelist)</div>
                         <div class="players-tab-item" id="player-tab-banned" onclick="switchPlayerTab('banned')">Jugadores Baneados</div>
                     </div>
                     <div class="players-content">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h3 id="playerListTitle" style="font-size:18px; color:#fff;">Operadores</h3>
+                            <h3 id="playerListTitle" style="font-size:18px; color:#fff;">Jugadores Conectados</h3>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" id="playerAddFormGroup" style="display: none;">
                             <label class="form-label" for="playerInputName">Nombre de usuario (Nick):</label>
                             <div style="display:flex; gap:12px;">
                                 <input id="playerInputName" type="text" class="form-input" style="flex:1;" placeholder="ej: Steve">
@@ -806,7 +807,7 @@
     let isOnline = false;
     let activeServerName = "";
     let activeServerType = "";
-    let currentPlayerTab = "ops";
+    let currentPlayerTab = "online";
     let currentFileDirectoryPath = "";
     let openFileRelativePath = "";
     let currentSoftwareType = "";
@@ -876,7 +877,7 @@
         if (link) link.classList.add('active');
 
         // On-enter triggers
-        if (tabId === 'players') fetchPlayersList();
+        if (tabId === 'players') switchPlayerTab('online');
         else if (tabId === 'files') loadDirectory("");
         else if (tabId === 'options') fetchProperties();
         else if (tabId === 'log') reloadLatestLog();
@@ -1205,17 +1206,30 @@
         currentPlayerTab = tabName;
         document.querySelectorAll('.players-tab-item').forEach(el => el.classList.remove('active'));
         document.getElementById(`player-tab-${tabName}`).classList.add('active');
-        const titles = { ops:"Administradores (OP)", whitelist:"Lista Blanca (Whitelist)", banned:"Jugadores Baneados" };
+        const titles = { online:"Jugadores Conectados", ops:"Administradores (OP)", whitelist:"Lista Blanca (Whitelist)", banned:"Jugadores Baneados" };
         document.getElementById("playerListTitle").textContent = titles[tabName];
+        
+        // Hide add form if on online players list
+        const addForm = document.getElementById("playerAddFormGroup");
+        if (addForm) {
+            addForm.style.display = (tabName === 'online') ? 'none' : 'block';
+        }
+        
         fetchPlayersList();
     }
 
     async function fetchPlayersList() {
         try {
-            const res  = await fetch("/api/players/lists");
-            const data = await res.json();
             const tbody = document.getElementById("playerTableBody");
             tbody.innerHTML = "";
+            
+            if (currentPlayerTab === 'online' && !isOnline) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:20px;">El servidor está apagado. Enciéndelo para ver los jugadores conectados.</td></tr>';
+                return;
+            }
+            
+            const res  = await fetch("/api/players/lists");
+            const data = await res.json();
             let list = data[currentPlayerTab] || [];
             if (list.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:20px;">No hay jugadores en esta lista.</td></tr>';
@@ -1223,11 +1237,24 @@
             }
             list.forEach(p => {
                 const tr = document.createElement("tr");
+                let actions = "";
+                if (currentPlayerTab === 'online') {
+                    const isOp = data.ops && data.ops.some(op => (op.name || '').toLowerCase() === (p.name || '').toLowerCase());
+                    actions = `
+                        <button class="btn btn-secondary btn-sm" style="display:inline-block; width:auto; margin-right:5px; padding: 4px 8px; font-size: 11px;" onclick="toggleOpOnline('${(p.name||'').replace(/'/g,"\\'")}', ${isOp})">${isOp ? 'Quitar OP' : 'Hacer OP'}</button>
+                        <button class="btn btn-danger btn-sm" style="display:inline-block; width:auto; margin-right:5px; padding: 4px 8px; font-size: 11px;" onclick="kickOnlinePlayer('${(p.name||'').replace(/'/g,"\\'")}')">Expulsar</button>
+                        <button class="btn btn-danger btn-sm" style="display:inline-block; width:auto; padding: 4px 8px; font-size: 11px;" onclick="banOnlinePlayer('${(p.name||'').replace(/'/g,"\\'")}')">Banear</button>
+                    `;
+                } else {
+                    actions = `
+                        <button class="btn btn-danger btn-sm" onclick="removePlayerFromList('${(p.name||'').replace(/'/g,"\\'")}', '${p.uuid || p.xuid || ''}')">Remover</button>
+                    `;
+                }
                 tr.innerHTML = `
                     <td>${p.name || 'Desconocido'}</td>
                     <td><code>${p.uuid || p.xuid || 'N/A'}</code></td>
                     <td style="text-align:right;">
-                        <button class="btn btn-danger btn-sm" onclick="removePlayerFromList('${(p.name||'').replace(/'/g,"\\'")}', '${p.uuid || p.xuid || ''}')">Remover</button>
+                        ${actions}
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -1256,6 +1283,72 @@
             if (data.status === "ok") { showToast(`Jugador '${name}' removido.`); fetchPlayersList(); }
             else showToast(data.message, true);
         } catch (_) { showToast("Error al remover jugador.", true); }
+    }
+
+    async function toggleOpOnline(name, isOp) {
+        try {
+            const endpoint = isOp ? "/api/players/remove" : "/api/players/add";
+            const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ list_name: "ops", player_name: name })
+            });
+            const data = await res.json();
+            if (data.status === "ok") {
+                showToast(`Administración cambiada para '${name}'.`);
+                fetchPlayersList();
+            } else {
+                showToast(data.message, true);
+            }
+        } catch (_) {
+            showToast("Error al cambiar permisos de admin.", true);
+        }
+    }
+
+    async function kickOnlinePlayer(name) {
+        const reason = prompt(`Razón para expulsar a ${name}:`, "Expulsado desde el Panel Web");
+        if (reason === null) return;
+        try {
+            const res = await fetch("/api/players/kick", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ player_name: name, reason })
+            });
+            const data = await res.json();
+            if (data.status === "ok") {
+                showToast(`Jugador '${name}' expulsado.`);
+                fetchPlayersList();
+            } else {
+                showToast(data.message, true);
+            }
+        } catch (_) {
+            showToast("Error al expulsar al jugador.", true);
+        }
+    }
+
+    async function banOnlinePlayer(name) {
+        if (!confirm(`¿Banear permanentemente a '${name}'?`)) return;
+        try {
+            const res = await fetch("/api/players/add", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ list_name: "banned", player_name: name })
+            });
+            const data = await res.json();
+            if (data.status === "ok") {
+                await fetch("/api/players/kick", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ player_name: name, reason: "Baneado del servidor" })
+                });
+                showToast(`Jugador '${name}' baneado y expulsado.`);
+                fetchPlayersList();
+            } else {
+                showToast(data.message, true);
+            }
+        } catch (_) {
+            showToast("Error al banear al jugador.", true);
+        }
     }
 
     // ============================================================
@@ -1657,10 +1750,26 @@
         document.getElementById("createServerModal").style.display = "none";
     }
 
+    function toggleNewServerTunnelInputs(val) {
+        document.querySelectorAll('.new-tunnel-input').forEach(el => {
+            el.style.display = 'none';
+        });
+        if (val === 'playit') {
+            document.getElementById('newPlayitInputs').style.display = 'block';
+        } else if (val === 'ngrok') {
+            document.getElementById('newNgrokInputs').style.display = 'flex';
+        } else if (val === 'zrok') {
+            document.getElementById('newZrokInputs').style.display = 'block';
+        } else if (val === 'localtonet') {
+            document.getElementById('newLocaltonetInputs').style.display = 'block';
+        }
+    }
+
     async function submitCreateServer() {
         const name = document.getElementById("newServerName").value.trim().replace(/\s+/g, '_');
         const type = document.getElementById("newServerType").value;
         const version = document.getElementById("newServerVersion").value;
+        const tunnel = document.getElementById("newServerTunnel").value;
         
         if (!name) {
             showToast("Por favor, ingresa un nombre para el servidor.", true);
@@ -1679,8 +1788,44 @@
             return;
         }
         
+        const payload = {
+            server_name: name,
+            server_type: type,
+            server_version: version,
+            tunnel_service: tunnel,
+            playit_secret: document.getElementById("newPlayitSecret").value.trim(),
+            ngrok_token: document.getElementById("newNgrokToken").value.trim(),
+            ngrok_region: document.getElementById("newNgrokRegion").value,
+            zrok_token: document.getElementById("newZrokToken").value.trim(),
+            localtonet_token: document.getElementById("newLocaltonetToken").value.trim()
+        };
+        
         closeCreateServerModal();
-        createServerInstance(name, type, version);
+        createServerInstanceWithPayload(payload);
+    }
+
+    async function createServerInstance(name, type, version) {
+        createServerInstanceWithPayload({
+            server_name: name,
+            server_type: type,
+            server_version: version,
+            tunnel_service: "playit"
+        });
+    }
+
+    async function createServerInstanceWithPayload(payload) {
+        showToast("Iniciando descarga e instalación. Revisa la Consola...");
+        switchTab("console");
+        try {
+            const res  = await fetch("/api/create-server", {
+                method:"POST", 
+                headers:{"Content-Type":"application/json"}, 
+                body:JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.status === "ok") { showToast(data.message); setTimeout(fetchServerList, 2000); }
+            else showToast(data.message, true);
+        } catch (_) { showToast("Fallo al iniciar el instalador.", true); }
     }
 </script>
 
@@ -1708,8 +1853,53 @@
                 <option value="">Selecciona tipo primero...</option>
             </select>
         </div>
+
+        <div class="form-group" style="margin-top: 8px;">
+            <label class="form-label">Túnel de Red / Conexión</label>
+            <select id="newServerTunnel" class="form-input" onchange="toggleNewServerTunnelInputs(this.value)">
+                <option value="playit">Playit.gg (Recomendado - Gratuito)</option>
+                <option value="ngrok">Ngrok (Requiere Token)</option>
+                <option value="zrok">Zrok (Requiere Token)</option>
+                <option value="localtonet">LocalToNet (Requiere Token)</option>
+            </select>
+        </div>
+
+        <div id="newPlayitInputs" class="form-group new-tunnel-input" style="display: block;">
+            <label class="form-label">Playit.gg Secret Key (Opcional)</label>
+            <input id="newPlayitSecret" type="text" class="form-input" placeholder="Vacío para autogenerar vinculación">
+            <span style="font-size:11px; color:var(--text-muted);">Si lo dejas vacío, el panel te dará un link de reclamo al iniciar.</span>
+        </div>
+
+        <div id="newNgrokInputs" class="new-tunnel-input" style="display: none; flex-direction: column; gap: 8px;">
+            <div class="form-group">
+                <label class="form-label">Ngrok Authtoken</label>
+                <input id="newNgrokToken" type="text" class="form-input" placeholder="Ingresa tu token de ngrok.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Ngrok Región</label>
+                <select id="newNgrokRegion" class="form-input">
+                    <option value="us">United States (us)</option>
+                    <option value="eu">Europe (eu)</option>
+                    <option value="ap">Asia/Pacific (ap)</option>
+                    <option value="au">Australia (au)</option>
+                    <option value="sa">South America (sa)</option>
+                    <option value="jp">Japan (jp)</option>
+                    <option value="in">India (in)</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="newZrokInputs" class="form-group new-tunnel-input" style="display: none;">
+            <label class="form-label">Zrok Authtoken</label>
+            <input id="newZrokToken" type="text" class="form-input" placeholder="Ingresa tu token de zrok.io">
+        </div>
+
+        <div id="newLocaltonetInputs" class="form-group new-tunnel-input" style="display: none;">
+            <label class="form-label">LocalToNet Authtoken</label>
+            <input id="newLocaltonetToken" type="text" class="form-input" placeholder="Ingresa tu token de localtonet.com">
+        </div>
         
-        <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:8px;">
+        <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:12px;">
             <button class="btn btn-secondary" style="width:auto; padding:10px 18px;" onclick="closeCreateServerModal()">Cancelar</button>
             <button class="btn btn-primary" style="width:auto; padding:10px 18px; background:var(--color-primary);" onclick="submitCreateServer()">Crear Servidor</button>
         </div>
