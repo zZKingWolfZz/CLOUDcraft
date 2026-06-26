@@ -1,5 +1,13 @@
 # 🚀 CloudCraft — Panel de Control Web para Google Colab
 
+<div align="center">
+
+[![Descargar Cuaderno (Recomendado)](https://img.shields.io/badge/Descargar-CloudCraft.ipynb-brightgreen?style=for-the-badge&logo=jupyter)](https://github.com/zZKingWolfZz/CLOUDcraft/releases/latest/download/CloudCraft.ipynb)
+&nbsp;&nbsp;
+[![Descargar Alternativo (Raw)](https://img.shields.io/badge/Descargar-Fallback-blue?style=for-the-badge&logo=github)](https://github.com/zZKingWolfZz/CLOUDcraft/raw/main/CloudCraft.ipynb)
+
+</div>
+
 CloudCraft es una solución interactiva y moderna para alojar, gestionar e iniciar servidores de Minecraft (tanto Java como Bedrock) utilizando la infraestructura en la nube de **Google Colab**, con almacenamiento persistente en **Google Drive** y una interfaz gráfica premium inspirada en paneles líderes de hosting.
 
 ---

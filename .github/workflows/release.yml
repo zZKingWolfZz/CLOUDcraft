@@ -1,0 +1,27 @@
+name: Release CloudCraft Notebook
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: CloudCraft.ipynb
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
