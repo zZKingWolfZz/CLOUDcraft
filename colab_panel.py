@@ -309,7 +309,14 @@ def install_playit_if_needed():
 
 
 # --- Helper Functions ---
-def load_server_config():
+_cached_server_config = None
+_cached_colab_configs = {}
+
+def load_server_config(force_reload=False):
+    global _cached_server_config
+    if _cached_server_config is not None and not force_reload:
+        return _cached_server_config
+        
     if not os.path.exists(SERVERCONFIG):
         default_config = {
             "server_list": [],
@@ -319,17 +326,27 @@ def load_server_config():
             "playit_proxy": {"secretkey": ""},
             "localtonet_proxy": {"authtoken": ""}
         }
-        with open(SERVERCONFIG, 'w') as f:
-            json.dump(default_config, f, indent=4)
+        try:
+            with open(SERVERCONFIG, 'w') as f:
+                json.dump(default_config, f, indent=4)
+        except Exception as e:
+            add_system_log(f"Error creando server_list.txt: {str(e)}")
+        _cached_server_config = default_config
         return default_config
     try:
         with open(SERVERCONFIG, 'r') as f:
-            return json.load(f)
+            config = json.load(f)
+            _cached_server_config = config
+            return config
     except Exception as e:
         add_system_log(f"Error cargando server_list.txt: {str(e)}")
+        if _cached_server_config is not None:
+            return _cached_server_config
         return {}
 
 def save_server_config(config):
+    global _cached_server_config
+    _cached_server_config = config
     try:
         with open(SERVERCONFIG, 'w') as f:
             json.dump(config, f, indent=4)
@@ -339,15 +356,24 @@ def save_server_config(config):
 def get_colab_config_path(server_name):
     return os.path.join(DRIVE_PATH, server_name, 'colabconfig.txt')
 
-def load_colab_config(server_name):
+def load_colab_config(server_name, force_reload=False):
+    global _cached_colab_configs
+    if server_name in _cached_colab_configs and not force_reload:
+        return _cached_colab_configs[server_name]
+        
     path = get_colab_config_path(server_name)
     if os.path.exists(path):
         try:
             with open(path, 'r') as f:
-                return json.load(f)
+                config = json.load(f)
+                _cached_colab_configs[server_name] = config
+                return config
         except Exception as e:
             add_system_log(f"Error cargando colabconfig.txt: {str(e)}")
-    return {"server_type": "paper", "server_version": "1.21.1", "tunnel_service": "playit"}
+            
+    default_config = {"server_type": "paper", "server_version": "1.21.1", "tunnel_service": "playit"}
+    _cached_colab_configs[server_name] = default_config
+    return default_config
 
 def get_server_properties_path(server_name):
     return os.path.join(DRIVE_PATH, server_name, 'server.properties')
@@ -768,9 +794,9 @@ def monitor_mc_output():
                 "version": str(target_java),
                 "build": "OpenJDK"
             }
-            path = get_colab_config_path(active_server)
             with open(path, 'w') as f:
                 json.dump(colabconfig, f, indent=4)
+            _cached_colab_configs[active_server] = colabconfig
             add_system_log(f"Configuración de Java {target_java} guardada en colabconfig.txt para futuros arranques.")
         except Exception as e:
             add_system_log(f"No se pudo guardar la configuración de Java en colabconfig.txt: {str(e)}")
@@ -1443,6 +1469,7 @@ def handle_network_config():
                 path = get_colab_config_path(active_server)
                 with open(path, 'w') as f:
                     json.dump(colabconfig, f, indent=4)
+                _cached_colab_configs[active_server] = colabconfig
             except Exception as e:
                 return jsonify({"status": "error", "message": f"Error al guardar colabconfig.txt: {str(e)}"})
                 
@@ -1638,6 +1665,7 @@ def create_server_thread_func(server_name, server_type, version, tunnel_service=
     }
     with open(get_colab_config_path(server_name), 'w') as f:
         json.dump(colabconfig, f, indent=4)
+    _cached_colab_configs[server_name] = colabconfig
         
     # Download EULA
     eula_path = os.path.join(server_dir, 'eula.txt')
