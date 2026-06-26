@@ -1185,6 +1185,43 @@ def handle_properties():
                         f.write(f"{key}={val}\n")
             
             add_system_log("Propiedades de server.properties actualizadas con éxito.")
+            
+            # Apply changes in real-time if the server is running
+            global mc_process, server_status
+            if mc_process and mc_process.poll() is None and server_status == "online":
+                add_system_log("Servidor activo detectado. Aplicando cambios compatibles en tiempo real...")
+                
+                # 1. Difficulty
+                diff = new_props.get("difficulty")
+                if diff:
+                    add_system_log(f"Comando en tiempo real: /difficulty {diff}")
+                    mc_process.stdin.write(f"difficulty {diff}\n")
+                    
+                # 2. Gamemode
+                gm = new_props.get("gamemode")
+                if gm:
+                    add_system_log(f"Comando en tiempo real: /defaultgamemode {gm}")
+                    mc_process.stdin.write(f"defaultgamemode {gm}\n")
+                    
+                # 3. Whitelist
+                wl = new_props.get("white-list")
+                if wl:
+                    wl_cmd = "whitelist on" if wl == "true" else "whitelist off"
+                    add_system_log(f"Comando en tiempo real: /{wl_cmd}")
+                    mc_process.stdin.write(f"{wl_cmd}\n")
+                    mc_process.stdin.write("whitelist reload\n")
+                    
+                # 4. SetMaxPlayers (Bedrock only)
+                colabconfig = load_colab_config(server_name)
+                if colabconfig.get("server_type", "") == "bedrock":
+                    mp = new_props.get("max-players")
+                    if mp:
+                        add_system_log(f"Comando en tiempo real: /setmaxplayers {mp}")
+                        mc_process.stdin.write(f"setmaxplayers {mp}\n")
+                
+                mc_process.stdin.flush()
+                add_system_log("Cambios aplicados en tiempo real con éxito.")
+            
             return jsonify({"status": "ok"})
         except Exception as e:
             return jsonify({"status": "error", "message": f"Error guardando propiedades: {str(e)}"})
