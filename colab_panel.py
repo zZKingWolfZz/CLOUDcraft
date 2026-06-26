@@ -1200,6 +1200,20 @@ def handle_properties():
     # POST - Save properties
     else:
         new_props = request.json
+        
+        # Read old properties to detect changes
+        old_properties = {}
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            parts = line.split('=', 1)
+                            old_properties[parts[0].strip()] = parts[1].strip()
+            except Exception as e:
+                add_system_log(f"Advertencia leyendo propiedades anteriores para comparación: {str(e)}")
+
         if not os.path.exists(path):
             # Create file
             with open(path, 'w') as f:
@@ -1229,45 +1243,122 @@ def handle_properties():
             
             add_system_log("Propiedades de server.properties actualizadas con éxito.")
             
+            # Detect changed properties
+            changed_props = []
+            for key, val in new_props.items():
+                if old_properties.get(key) != val:
+                    changed_props.append(key)
+
             # Apply changes in real-time if the server is running
             global mc_process, server_status
+            realtime_applied = []
+            restart_required = []
+            
+            PROPERTY_NAMES = {
+                "difficulty": "Dificultad",
+                "gamemode": "Modo de juego",
+                "max-players": "Espacios (slots)",
+                "white-list": "Lista blanca (Whitelist)",
+                "pvp": "PVP",
+                "enable-command-block": "Bloques de comandos",
+                "online-mode": "No-Premium (Cracked)",
+                "allow-flight": "Vuelo (Flight)",
+                "spawn-npcs": "Aldeanos / NPCs",
+                "allow-nether": "Inframundo (Nether)",
+                "motd": "MOTD (Mensaje)",
+                "level-name": "Nombre del Mundo",
+                "level-seed": "Semilla del Mundo",
+                "simulation-distance": "Distancia de Simulación",
+                "view-distance": "Distancia de Vista",
+                "server-port": "Puerto del Servidor"
+            }
+
             if mc_process and mc_process.poll() is None and server_status == "online":
                 add_system_log("Servidor activo detectado. Aplicando cambios compatibles en tiempo real...")
-                
-                # 1. Difficulty
-                diff = new_props.get("difficulty")
-                if diff:
-                    add_system_log(f"Comando en tiempo real: /difficulty {diff}")
-                    mc_process.stdin.write(f"difficulty {diff}\n")
-                    
-                # 2. Gamemode
-                gm = new_props.get("gamemode")
-                if gm:
-                    add_system_log(f"Comando en tiempo real: /defaultgamemode {gm}")
-                    mc_process.stdin.write(f"defaultgamemode {gm}\n")
-                    add_system_log(f"Comando en tiempo real: /gamemode {gm} @a")
-                    mc_process.stdin.write(f"gamemode {gm} @a\n")
-                    
-                # 3. Whitelist
-                wl = new_props.get("white-list")
-                if wl:
-                    wl_cmd = "whitelist on" if wl == "true" else "whitelist off"
-                    add_system_log(f"Comando en tiempo real: /{wl_cmd}")
-                    mc_process.stdin.write(f"{wl_cmd}\n")
-                    mc_process.stdin.write("whitelist reload\n")
-                    
-                # 4. SetMaxPlayers (Bedrock only)
                 colabconfig = load_colab_config(server_name)
-                if colabconfig.get("server_type", "") == "bedrock":
-                    mp = new_props.get("max-players")
-                    if mp:
-                        add_system_log(f"Comando en tiempo real: /setmaxplayers {mp}")
-                        mc_process.stdin.write(f"setmaxplayers {mp}\n")
+                server_type = colabconfig.get("server_type", "")
+                is_bedrock = (server_type == "bedrock")
+                
+                for key in changed_props:
+                    spanish_name = PROPERTY_NAMES.get(key, key)
+                    
+                    if key == "difficulty":
+                        diff = new_props.get("difficulty")
+                        if diff:
+                            add_system_log(f"Comando en tiempo real: /difficulty {diff}")
+                            mc_process.stdin.write(f"difficulty {diff}\n")
+                            realtime_applied.append(spanish_name)
+                            
+                    elif key == "gamemode":
+                        gm = new_props.get("gamemode")
+                        if gm:
+                            add_system_log(f"Comando en tiempo real: /defaultgamemode {gm}")
+                            mc_process.stdin.write(f"defaultgamemode {gm}\n")
+                            add_system_log(f"Comando en tiempo real: /gamemode {gm} @a")
+                            mc_process.stdin.write(f"gamemode {gm} @a\n")
+                            realtime_applied.append(spanish_name)
+                            
+                    elif key == "white-list":
+                        wl = new_props.get("white-list")
+                        if wl:
+                            base_cmd = "allowlist" if is_bedrock else "whitelist"
+                            wl_cmd = f"{base_cmd} on" if wl == "true" else f"{base_cmd} off"
+                            add_system_log(f"Comando en tiempo real: /{wl_cmd}")
+                            mc_process.stdin.write(f"{wl_cmd}\n")
+                            mc_process.stdin.write(f"{base_cmd} reload\n")
+                            realtime_applied.append(spanish_name)
+                            
+                    elif key == "max-players":
+                        mp = new_props.get("max-players")
+                        if mp:
+                            if is_bedrock:
+                                add_system_log(f"Comando en tiempo real: /setmaxplayers {mp}")
+                                mc_process.stdin.write(f"setmaxplayers {mp}\n")
+                                realtime_applied.append(spanish_name)
+                            else:
+                                restart_required.append(spanish_name)
+                                
+                    elif key == "enable-command-block":
+                        cb = new_props.get("enable-command-block")
+                        if cb:
+                            cb_val = cb.lower()
+                            rule_name = "commandblocksenabled" if is_bedrock else "commandBlocksEnabled"
+                            add_system_log(f"Comando en tiempo real: /gamerule {rule_name} {cb_val}")
+                            mc_process.stdin.write(f"gamerule {rule_name} {cb_val}\n")
+                            realtime_applied.append(spanish_name)
+                            
+                    elif key == "pvp":
+                        pvp = new_props.get("pvp")
+                        if pvp:
+                            pvp_val = pvp.lower()
+                            if is_bedrock:
+                                add_system_log(f"Comando en tiempo real: /gamerule pvp {pvp_val}")
+                                mc_process.stdin.write(f"gamerule pvp {pvp_val}\n")
+                                realtime_applied.append(spanish_name)
+                            else:
+                                friendly_fire = "true" if pvp_val == "true" else "false"
+                                add_system_log(f"Comando en tiempo real (Java PVP workaround): /team modify cc_pvp friendlyFire {friendly_fire}")
+                                mc_process.stdin.write("team add cc_pvp\n")
+                                mc_process.stdin.write(f"team modify cc_pvp friendlyFire {friendly_fire}\n")
+                                mc_process.stdin.write("team join cc_pvp @a\n")
+                                realtime_applied.append(spanish_name)
+                                
+                    elif key in PROPERTY_NAMES:
+                        restart_required.append(spanish_name)
                 
                 mc_process.stdin.flush()
                 add_system_log("Cambios aplicados en tiempo real con éxito.")
-            
-            return jsonify({"status": "ok"})
+                
+                return jsonify({
+                    "status": "ok",
+                    "realtime_applied": realtime_applied,
+                    "restart_required": restart_required
+                })
+            else:
+                return jsonify({
+                    "status": "ok",
+                    "message": "Propiedades guardadas. Se aplicarán cuando inicies el servidor."
+                })
         except Exception as e:
             return jsonify({"status": "error", "message": f"Error guardando propiedades: {str(e)}"})
 

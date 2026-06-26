@@ -855,12 +855,13 @@
     // ============================================================
     // TOAST
     // ============================================================
-    function showToast(message, isError = false) {
+    function showToast(message, isError = false, duration = 3500) {
         const t = document.getElementById("toast");
-        t.textContent = message;
+        t.innerHTML = message.replace(/\n/g, "<br>");
         t.style.borderLeftColor = isError ? "var(--color-danger)" : "var(--color-success)";
         t.classList.add("show");
-        setTimeout(() => t.classList.remove("show"), 3500);
+        if (t.timeoutId) clearTimeout(t.timeoutId);
+        t.timeoutId = setTimeout(() => t.classList.remove("show"), duration);
     }
 
     // ============================================================
@@ -1145,8 +1146,24 @@
         try {
             const res  = await fetch("/api/properties", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(props)});
             const data = await res.json();
-            if (data.status === "ok") showToast("Propiedades guardadas correctamente.");
-            else showToast(data.message, true);
+            if (data.status === "ok") {
+                if ((data.realtime_applied && data.realtime_applied.length > 0) || (data.restart_required && data.restart_required.length > 0)) {
+                    let msg = "";
+                    if (data.realtime_applied && data.realtime_applied.length > 0) {
+                        msg += `⚡ <b>Aplicado al instante:</b> ${data.realtime_applied.join(", ")}\n`;
+                    }
+                    if (data.restart_required && data.restart_required.length > 0) {
+                        msg += `⚠️ <b>Requiere reinicio:</b> ${data.restart_required.join(", ")}`;
+                    }
+                    showToast(msg, false, (data.restart_required && data.restart_required.length > 0) ? 8000 : 4500);
+                } else if (data.message) {
+                    showToast(data.message);
+                } else {
+                    showToast("Propiedades guardadas correctamente.");
+                }
+            } else {
+                showToast(data.message, true);
+            }
         } catch (_) { showToast("Fallo al guardar propiedades.", true); }
     }
 
