@@ -1245,6 +1245,8 @@ def handle_properties():
                 if gm:
                     add_system_log(f"Comando en tiempo real: /defaultgamemode {gm}")
                     mc_process.stdin.write(f"defaultgamemode {gm}\n")
+                    add_system_log(f"Comando en tiempo real: /gamemode {gm} @a")
+                    mc_process.stdin.write(f"gamemode {gm} @a\n")
                     
                 # 3. Whitelist
                 wl = new_props.get("white-list")
