@@ -1,3 +1,25 @@
+
+def query_mcstatus_fast():
+    import socket
+    # Quick socket check on port 25565 (timeout 0.3s)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.3)
+    try:
+        res = s.connect_ex(('127.0.0.1', 25565))
+        s.close()
+        if res != 0:
+            return 0, 0
+    except:
+        return 0, 0
+
+    try:
+        from mcstatus import JavaServer
+        server = JavaServer.lookup("127.0.0.1:25565", timeout=1)
+        query = server.status()
+        return query.players.online, query.players.max
+    except:
+        return 0, 0
+
 # -*- coding: utf-8 -*-
 import os
 import sys

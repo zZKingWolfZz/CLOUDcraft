@@ -27,7 +27,7 @@ DEFAULT_API_KEY = os.environ.get("COLAB_API_KEY", "cloudcraft-secret-key-2026")
 
 def get_google_provider_cfg():
     try:
-        return requests.get(GOOGLE_DISCOVERY_URL, timeout=5).json()
+        return requests.get(GOOGLE_DISCOVERY_URL, timeout=25).json()
     except Exception:
         return {
             "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
@@ -94,7 +94,7 @@ def callback():
     }
 
     try:
-        token_res = requests.post(token_endpoint, data=token_data, timeout=10)
+        token_res = requests.post(token_endpoint, data=token_data, timeout=25)
         tokens = token_res.json()
         access_token = tokens.get("access_token")
 
@@ -106,7 +106,7 @@ def callback():
         user_res = requests.get(
             userinfo_endpoint,
             headers={"Authorization": f"Bearer {access_token}"},
-            timeout=8
+            timeout=25
         )
         user_info = user_res.json()
 
@@ -139,7 +139,7 @@ def fetch_drive_config(access_token):
         res = requests.get(
             f"https://www.googleapis.com/drive/v3/files?q={urllib.parse.quote(q)}",
             headers=headers,
-            timeout=8
+            timeout=25
         )
         files = res.json().get("files", [])
         if files:
@@ -147,7 +147,7 @@ def fetch_drive_config(access_token):
             content_res = requests.get(
                 f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media",
                 headers=headers,
-                timeout=8
+                timeout=25
             )
             data = content_res.json()
             return {
@@ -171,7 +171,7 @@ def proxy_status():
 
     endpoint = f"{colab_url}/api/remote/status?key={api_key}"
     try:
-        res = requests.get(endpoint, timeout=8)
+        res = requests.get(endpoint, timeout=25)
         return jsonify(res.json()), res.status_code
     except Exception as e:
         return jsonify({
@@ -190,7 +190,7 @@ def proxy_restart():
 
     endpoint = f"{colab_url}/api/remote/restart?key={api_key}"
     try:
-        res = requests.post(endpoint, timeout=12)
+        res = requests.post(endpoint, timeout=25)
         return jsonify(res.json()), res.status_code
     except Exception as e:
         return jsonify({
@@ -209,7 +209,7 @@ def proxy_start():
 
     endpoint = f"{colab_url}/api/remote/start?key={api_key}"
     try:
-        res = requests.post(endpoint, timeout=10)
+        res = requests.post(endpoint, timeout=25)
         return jsonify(res.json()), res.status_code
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 502
@@ -225,7 +225,7 @@ def proxy_stop():
 
     endpoint = f"{colab_url}/api/remote/stop?key={api_key}"
     try:
-        res = requests.post(endpoint, timeout=10)
+        res = requests.post(endpoint, timeout=25)
         return jsonify(res.json()), res.status_code
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 502
@@ -242,7 +242,7 @@ def proxy_command():
 
     endpoint = f"{colab_url}/api/remote/command?key={api_key}"
     try:
-        res = requests.post(endpoint, json={"command": cmd}, timeout=10)
+        res = requests.post(endpoint, json={"command": cmd}, timeout=25)
         return jsonify(res.json()), res.status_code
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 502
