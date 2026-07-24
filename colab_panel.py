@@ -15,6 +15,36 @@ from flask import Flask, jsonify, request, send_from_directory, render_template_
 
 app = Flask(__name__)
 
+# ── CORS Middleware & Remote API Security ────────────────────────────────────
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-API-Key'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, DELETE, PUT'
+    return response
+
+def get_remote_api_key():
+    config_path = os.path.join(DRIVE_PATH, 'server_list.txt')
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get('api_key', 'cloudcraft-secret-key-2026')
+        except:
+            pass
+    return 'cloudcraft-secret-key-2026'
+
+def verify_remote_auth(req):
+    api_key = get_remote_api_key()
+    # Check query param, header X-API-Key, or Bearer token
+    key_param = req.args.get('key') or req.headers.get('X-API-Key')
+    if not key_param:
+        auth_header = req.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            key_param = auth_header[7:]
+    return key_param == api_key
+
+
 # --- Paths & Configs ---
 # Support both Google Colab Linux path and test path
 if os.path.exists('/content/drive'):
@@ -2752,6 +2782,121 @@ def download_latest_log():
     if os.path.exists(log_file_path):
         return send_from_directory(log_dir, 'latest.log', as_attachment=True)
     return "Error: El archivo logs/latest.log no existe.", 404
+
+
+# ── REMOTE API ENDPOINTS FOR RENDER & EXTERNAL CLIENTS ────────────────────────
+@app.route('/api/remote/status', methods=['GET', 'OPTIONS'])
+def remote_status():
+    if request.method == 'OPTIONS':
+        return '', 204
+    if not verify_remote_auth(request):
+        return jsonify({"status": "error", "message": "Clave API invalida o no proporcionada."}), 401
+    
+    global server_status, active_server, mc_process
+    config = load_server_config()
+    active_srv = config.get("server_in_use", "")
+    
+    cpu = psutil.cpu_percent()
+    ram = psutil.virtual_memory()
+    ram_used = round(ram.used / (1024**3), 1)
+    ram_total = round(ram.total / (1024**3), 1)
+    
+    players_online = 0
+    players_max = 0
+    if server_status == "online":
+        try:
+            from mcstatus import JavaServer
+            server = JavaServer.lookup("127.0.0.1:25565")
+            query = server.status()
+            players_online = query.players.online
+            players_max = query.players.max
+        except Exception:
+            pass
+            
+    if mc_process and mc_process.poll() is not None:
+        server_status = "offline"
+        mc_process = None
+
+    raw_ip = get_tunnel_ip() if server_status == "online" else "Servidor Apagado"
+    
+    return jsonify({
+        "status": "ok",
+        "server_status": server_status,
+        "active_server": active_srv,
+        "ip": raw_ip,
+        "cpu_percent": cpu,
+        "ram_used_gb": ram_used,
+        "ram_total_gb": ram_total,
+        "players_online": players_online,
+        "players_max": players_max,
+        "api_key": get_remote_api_key()
+    })
+
+@app.route('/api/remote/restart', methods=['POST', 'OPTIONS'])
+def remote_restart():
+    if request.method == 'OPTIONS':
+        return '', 204
+    if not verify_remote_auth(request):
+        return jsonify({"status": "error", "message": "Clave API invalida o no proporcionada."}), 401
+        
+    global mc_process, server_status
+    if not mc_process or mc_process.poll() is not None:
+        # If offline, start it directly
+        colabconfig = load_colab_config(active_server)
+        version = colabconfig.get("server_version", "1.21.1")
+        server_type = colabconfig.get("server_type", "paper")
+        try:
+            install_java_if_needed(version, server_type)
+        except Exception as e:
+            add_system_log(f"Java verify error: {str(e)}")
+        success = start_mc_process_internal()
+        if success:
+            return jsonify({"status": "ok", "message": "Servidor iniciado desde remoto."})
+        else:
+            return jsonify({"status": "error", "message": "Fallo al iniciar servidor."})
+
+    return restart_mc()
+
+@app.route('/api/remote/start', methods=['POST', 'OPTIONS'])
+def remote_start():
+    if request.method == 'OPTIONS':
+        return '', 204
+    if not verify_remote_auth(request):
+        return jsonify({"status": "error", "message": "Clave API invalida o no proporcionada."}), 401
+    return start_mc()
+
+@app.route('/api/remote/stop', methods=['POST', 'OPTIONS'])
+def remote_stop():
+    if request.method == 'OPTIONS':
+        return '', 204
+    if not verify_remote_auth(request):
+        return jsonify({"status": "error", "message": "Clave API invalida o no proporcionada."}), 401
+    return stop_mc()
+
+@app.route('/api/remote/command', methods=['POST', 'OPTIONS'])
+def remote_command():
+    if request.method == 'OPTIONS':
+        return '', 204
+    if not verify_remote_auth(request):
+        return jsonify({"status": "error", "message": "Clave API invalida o no proporcionada."}), 401
+    return send_command()
+
+@app.route('/api/remote/key', methods=['GET', 'POST', 'OPTIONS'])
+def remote_key_management():
+    if request.method == 'OPTIONS':
+        return '', 204
+    config = load_server_config()
+    if request.method == 'GET':
+        return jsonify({"status": "ok", "api_key": config.get("api_key", "cloudcraft-secret-key-2026")})
+    elif request.method == 'POST':
+        data = request.json or {}
+        new_key = data.get("api_key", "").strip()
+        if not new_key:
+            return jsonify({"status": "error", "message": "La clave API no puede estar vacia."})
+        config["api_key"] = new_key
+        save_server_config(config)
+        return jsonify({"status": "ok", "api_key": new_key, "message": "Clave API actualizada correctamente."})
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8000))

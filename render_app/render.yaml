@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: cloudcraft-aternos-render
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    plan: free
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: COLAB_TUNNEL_URL
+        sync: false
+      - key: COLAB_API_KEY
+        value: cloudcraft-secret-key-2026

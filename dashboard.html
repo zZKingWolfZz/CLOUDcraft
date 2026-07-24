@@ -722,6 +722,48 @@
 
             <!-- ===== TAB: RED / TÚNELES ===== -->
             <div id="tab-network" class="tab-view">
+
+                <!-- Render / Remote API Access Card -->
+                <div class="config-container" style="margin-top: 24px; border: 1px solid rgba(44, 126, 255, 0.3); background: rgba(16, 23, 42, 0.8);">
+                    <div class="config-title-bar" style="display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <div class="config-title" style="color: #60a5fa; display: flex; align-items: center; gap: 8px;">
+                                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                Acceso Remoto desde Render.com / App Externa
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                                Conecta tu servidor a tu aplicación de Render.com para verificar el estado y reiniciar el servidor desde cualquier lugar.
+                            </div>
+                        </div>
+                        <span class="status-badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;">API ACTIVA</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">Clave API Secreta (API Key)</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input id="remoteApiKeyInput" type="text" class="form-input" value="cloudcraft-secret-key-2026" style="font-family: var(--font-mono); font-size: 12px;" readonly>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="copyApiKey()" style="width: auto; padding: 0 16px;">📋 Copiar</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Endpoint Remoto de Reinicio</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input id="remoteEndpointInput" type="text" class="form-input" value="/api/remote/restart" style="font-family: var(--font-mono); font-size: 12px;" readonly>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="copyRemoteEndpoint()" style="width: auto; padding: 0 16px;">📋 Copiar Endpoint</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(0, 0, 0, 0.25); border-radius: 8px; padding: 14px; margin-top: 8px; font-size: 12.5px; color: #d1d5db; line-height: 1.6;">
+                        <strong style="color: #38bdf8;">📌 Instrucciones para Render.com:</strong><br>
+                        1. Abre tu panel en <strong>Render.com</strong> y despliega la aplicación de control.<br>
+                        2. Ingresa la <strong>URL del Túnel Público</strong> (Ngrok / Zrok / LocalToNet) generada arriba.<br>
+                        3. Pega tu <strong>Clave API Secreta</strong> para autorizar las solicitudes.<br>
+                        4. ¡Podrás presionar <strong>REINICIAR SERVIDOR</strong> en Render para reiniciar tu servidor de Minecraft al instante!
+                    </div>
+                </div>
+
                 <div class="panel-header">
                     <h2 class="panel-title">Red / Túneles</h2>
                     <p class="panel-desc">Configura el servicio de túnel que permite conectarse al servidor desde internet.</p>
@@ -1844,6 +1886,33 @@
             else showToast(data.message, true);
         } catch (_) { showToast("Fallo al iniciar el instalador.", true); }
     }
+
+function copyApiKey() {
+    const input = document.getElementById('remoteApiKeyInput');
+    if (input) {
+        navigator.clipboard.writeText(input.value).then(() => {
+            showToast('✅ Clave API copiada al portapapeles.');
+        }).catch(() => {
+            input.select();
+            document.execCommand('copy');
+            showToast('✅ Clave API copiada.');
+        });
+    }
+}
+
+function copyRemoteEndpoint() {
+    const input = document.getElementById('remoteEndpointInput');
+    if (input) {
+        navigator.clipboard.writeText(input.value).then(() => {
+            showToast('✅ Endpoint copiado al portapapeles.');
+        }).catch(() => {
+            input.select();
+            document.execCommand('copy');
+            showToast('✅ Endpoint copiado.');
+        });
+    }
+}
+
 </script>
 
 <!-- ===== MODAL: CREAR SERVIDOR ===== -->
