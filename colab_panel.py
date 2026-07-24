@@ -2898,6 +2898,51 @@ def remote_key_management():
         return jsonify({"status": "ok", "api_key": new_key, "message": "Clave API actualizada correctamente."})
 
 
+
+# ── AUTOMATIC CLOUDFLARE HTTP TUNNEL FOR RENDER / EXTERNAL ACCESS (PORT 8000) ───
+cf_tunnel_url = ""
+
+def start_cloudflare_panel_tunnel():
+    global cf_tunnel_url
+    try:
+        # Check if cloudflared is installed
+        if not os.path.exists('/usr/local/bin/cloudflared') and not os.path.exists('/usr/bin/cloudflared'):
+            subprocess.run(['wget', '-q', 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64', '-O', '/tmp/cloudflared'], check=False)
+            subprocess.run(['chmod', '+x', '/tmp/cloudflared'], check=False)
+            cf_bin = '/tmp/cloudflared'
+        else:
+            cf_bin = 'cloudflared'
+
+        log_path = os.path.join(LOGS_DIR, 'cloudflared_panel.log')
+        proc = subprocess.Popen([cf_bin, 'tunnel', '--url', 'http://127.0.0.1:8000'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+        # Parse log for trycloudflare.com URL
+        start_time = time.time()
+        while time.time() - start_time < 15:
+            line = proc.stdout.readline()
+            if not line:
+                break
+            with open(log_path, 'a', encoding='utf-8') as lf:
+                lf.write(line)
+            match = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
+            if match:
+                cf_tunnel_url = match.group(0)
+                add_system_log(f"✅ Túnel Público HTTPS de Cloudflare listo: {cf_tunnel_url}")
+                # Save tunnel URL in server_list.txt config
+                try:
+                    cfg = load_server_config()
+                    cfg["tunnel_url"] = cf_tunnel_url
+                    save_server_config(cfg)
+                except:
+                    pass
+                break
+    except Exception as e:
+        add_system_log(f"Aviso túnel Cloudflare: {str(e)}")
+
+# Start Cloudflare tunnel in background thread when starting colab_panel
+threading.Thread(target=start_cloudflare_panel_tunnel, daemon=True).start()
+
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8000))
     
