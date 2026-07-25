@@ -1,4 +1,21 @@
 
+@app.route('/api/servers/switch', methods=['POST'])
+def switch_active_server_endpoint():
+    data = request.json or {}
+    server_name = data.get("server_name", "").strip()
+    if not server_name:
+        return jsonify({"status": "error", "message": "Nombre de servidor inválido."}), 400
+        
+    cfg = load_server_config()
+    cfg["server_in_use"] = server_name
+    save_server_config(cfg)
+    global active_server
+    active_server = server_name
+    add_system_log(f"Servidor activo cambiado a: {server_name}")
+    return jsonify({"status": "ok", "message": f"Cambiado al servidor '{server_name}'."})
+
+
+
 # ── UNIFIED ULTRA-FAST DASHBOARD SUMMARY ENDPOINT (ZERO-LAG CACHED) ──────────────
 last_summary_time = 0
 cached_summary_data = {}
