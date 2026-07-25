@@ -1,3 +1,7 @@
+import os, sys, time, json, base64, subprocess, threading, re, glob, psutil
+from flask import Flask, jsonify, request, send_from_directory, render_template_string, Response, send_file
+
+app = Flask(__name__)
 
 @app.route('/api/servers/switch', methods=['POST'])
 def switch_active_server_endpoint():
@@ -171,9 +175,6 @@ import psutil
 import shutil
 import zipfile
 from bs4 import BeautifulSoup
-from flask import Flask, jsonify, request, send_from_directory, render_template_string, Response
-
-app = Flask(__name__)
 
 # ── CORS Middleware & Remote API Security ────────────────────────────────────
 @app.after_request
@@ -3138,4 +3139,3 @@ if __name__ == '__main__':
         except Exception as e:
             add_system_log(f"Reintentando puerto {port} (Intento {attempt+1}/6): {str(e)}")
             time.sleep(2)
-
