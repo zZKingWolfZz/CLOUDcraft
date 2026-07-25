@@ -1,22 +1,45 @@
 
-def get_latest_logs_fast(max_lines=60):
-    log_path = os.path.join(LOGS_DIR, 'latest.log')
-    if not os.path.exists(log_path):
-        return ["No hay registros de consola aún..."]
+
+def get_latest_logs_fast(max_lines=80):
+    import glob
+    config = load_server_config()
+    active_srv = config.get("server_in_use", "")
+    
+    candidate_log_paths = [
+        os.path.join(drive_path, active_srv, 'logs', 'latest.log'),
+        os.path.join(drive_path, 'servers', active_srv, 'logs', 'latest.log'),
+        os.path.join(drive_path, 'logs', 'latest.log'),
+        os.path.join(LOGS_DIR, 'latest.log'),
+        os.path.join(drive_path, 'latest.log')
+    ]
+    
+    log_path = None
+    for p in candidate_log_paths:
+        if p and os.path.exists(p):
+            log_path = p
+            break
+            
+    if not log_path:
+        matches = glob.glob(os.path.join(drive_path, '**', 'latest.log'), recursive=True)
+        if matches:
+            log_path = matches[0]
+
+    if not log_path or not os.path.exists(log_path):
+        return ["Esperando inicio del servidor de Minecraft... (Registros aún no creados)"]
+
     try:
         with open(log_path, 'rb') as f:
             f.seek(0, os.SEEK_END)
             size = f.tell()
-            # Read last 16KB max
-            fetch_size = min(size, 16384)
+            fetch_size = min(size, 32768)
             f.seek(size - fetch_size)
             lines = f.read().decode('utf-8', errors='ignore').splitlines()
             return lines[-max_lines:]
     except Exception as e:
-        return [f"Error leyendo logs: {str(e)}"]
+        return [f"Aviso leyendo consola: {str(e)}"]
 
 
-# ── DETECTOR INTELIGENTE DE CARPETA DE DRIVE (LOCAL O COMPARTIDA) ─────────────
+
 def find_minecraft_drive_folder():
     import os, glob
     
