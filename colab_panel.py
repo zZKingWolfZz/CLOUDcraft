@@ -1,4 +1,36 @@
 
+# ── DETECTOR INTELIGENTE DE CARPETA DE DRIVE (LOCAL O COMPARTIDA) ─────────────
+def find_minecraft_drive_folder():
+    import os, glob
+    
+    # 1. Rutas estándar en Drive
+    candidate_paths = [
+        '/content/drive/MyDrive/minecraft',
+        '/content/drive/MyDrive/Shared with me/minecraft',
+        '/content/drive/MyDrive/Compartido conmigo/minecraft'
+    ]
+    for p in candidate_paths:
+        if os.path.exists(p):
+            return p
+            
+    # 2. Buscar accesos directos o carpetas compartidas por ID de atajo
+    shortcut_matches = glob.glob('/content/drive/MyDrive/.shortcut-targets-by-id/*/minecraft')
+    if shortcut_matches:
+        return shortcut_matches[0]
+        
+    # 3. Buscar en Unidades Compartidas (Shared Drives)
+    shared_drives = glob.glob('/content/drive/Shareddrives/*/minecraft')
+    if shared_drives:
+        return shared_drives[0]
+        
+    # 4. Si no existe, crear la carpeta predeterminada en MyDrive
+    default_p = '/content/drive/MyDrive/minecraft'
+    os.makedirs(default_p, exist_ok=True)
+    return default_p
+
+drive_path = find_minecraft_drive_folder()
+
+
 def query_mcstatus_fast():
     import socket
     # Quick socket check on port 25565 (timeout 0.3s)
