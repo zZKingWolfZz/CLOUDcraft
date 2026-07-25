@@ -1019,16 +1019,29 @@ def start_mc_internal_run():
 
 @app.route('/')
 def index():
-    # Read dashboard.html from scratch directory
-    dashboard_path = os.path.join(os.path.dirname(__file__), 'dashboard.html')
-    if not os.path.exists(dashboard_path):
-        # Fallback if executing from a different cwd
-        dashboard_path = r'C:\Users\arnie\.gemini\antigravity-ide\brain\ccecd530-23c0-4479-a187-164a80a19c55\scratch\dashboard.html'
+    # Candidate paths for dashboard.html
+    candidate_paths = [
+        os.path.join(os.path.dirname(__file__), 'dashboard.html'),
+        os.path.join(drive_path, 'dashboard.html'),
+        '/content/drive/MyDrive/minecraft/dashboard.html'
+    ]
     
-    if os.path.exists(dashboard_path):
-        with open(dashboard_path, 'r', encoding='utf-8') as f:
-            return render_template_string(f.read())
-    return "Error: dashboard.html no encontrado."
+    dash_file = None
+    for p in candidate_paths:
+        if p and os.path.exists(p):
+            dash_file = p
+            break
+            
+    if dash_file and os.path.exists(dash_file):
+        try:
+            with open(dash_file, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            return Response(content, mimetype='text/html')
+        except Exception as e:
+            return f"Error leyendo dashboard.html: {str(e)}", 500
+
+    return "<h2>⚠️ Error: dashboard.html no se encuentra en Drive. Vuelve a ejecutar la celda 5 en Colab.</h2>", 404
+
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
