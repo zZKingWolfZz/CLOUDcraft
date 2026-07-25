@@ -3107,10 +3107,16 @@ def start_cloudflare_panel_tunnel():
 threading.Thread(target=start_cloudflare_panel_tunnel, daemon=True).start()
 
 
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8000))
     
-    # Load initial historical logs for the active server if exists
+    # Kill any orphaned process listening on port 8000
+    try:
+        subprocess.run(['fuser', '-k', f'{port}/tcp'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    except:
+        pass
+        
     config = load_server_config()
     active_server = config.get("server_in_use", "")
     if active_server:
@@ -3119,4 +3125,17 @@ if __name__ == '__main__':
         add_system_log("No hay servidor seleccionado por defecto.")
         
     add_system_log(f"Iniciando panel web en puerto {port}...")
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+
+    # Bind with retry loop
+    for attempt in range(6):
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.close()
+            app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+            break
+        except Exception as e:
+            add_system_log(f"Reintentando puerto {port} (Intento {attempt+1}/6): {str(e)}")
+            time.sleep(2)
+
