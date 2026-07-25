@@ -1,4 +1,21 @@
 
+def get_latest_logs_fast(max_lines=60):
+    log_path = os.path.join(LOGS_DIR, 'latest.log')
+    if not os.path.exists(log_path):
+        return ["No hay registros de consola aún..."]
+    try:
+        with open(log_path, 'rb') as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            # Read last 16KB max
+            fetch_size = min(size, 16384)
+            f.seek(size - fetch_size)
+            lines = f.read().decode('utf-8', errors='ignore').splitlines()
+            return lines[-max_lines:]
+    except Exception as e:
+        return [f"Error leyendo logs: {str(e)}"]
+
+
 # ── DETECTOR INTELIGENTE DE CARPETA DE DRIVE (LOCAL O COMPARTIDA) ─────────────
 def find_minecraft_drive_folder():
     import os, glob
@@ -1023,17 +1040,8 @@ def get_status():
 
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
-    cursor = int(request.args.get('cursor', 0))
-    
-    # If the cursor is larger than the current log count, reset it (client page reloads or panel restarted)
-    if cursor > len(session_logs):
-        cursor = 0
-        
-    lines = session_logs[cursor:]
-    return jsonify({
-        "lines": lines,
-        "cursor": cursor + len(lines)
-    })
+    lines = get_latest_logs_fast()
+    return jsonify({"status": "ok", "logs": lines})
 
 def start_mc_process_internal():
     global mc_process, server_status, active_server, log_thread, session_logs, online_players
