@@ -890,8 +890,8 @@
         document.getElementById("tzArea").value = "America";
         populateTimezoneZones("America");
         document.getElementById("tzZone").value = "Bogota";
-        setInterval(fetchStats, 3000);
-        setInterval(fetchLogs, 3500);
+        
+        
     });
 
     // ============================================================
@@ -1933,6 +1933,68 @@ function checkAdminRole(targetTabId) {
     }
     return true;
 }
+
+
+// ── UNIFIED ULTRA-FAST SINGLE-REQUEST POLLING ─────────────────────────────
+let isFetchingSummary = false;
+let lastLogsHash = "";
+
+async function fetchDashboardSummary() {
+    if (isFetchingSummary) return;
+    isFetchingSummary = true;
+    try {
+        const res = await fetch('/api/summary');
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        if (data.status === "ok") {
+            // Update Server Status & IP
+            const statusBadge = document.getElementById("status-badge");
+            const serverIp = document.getElementById("server-ip");
+            if (statusBadge) {
+                const isOnline = data.server_status === "online";
+                statusBadge.className = isOnline ? "badge badge-online" : "badge badge-offline";
+                statusBadge.innerText = isOnline ? "🟢 EN LÍNEA" : "🔴 APAGADO";
+            }
+            if (serverIp) {
+                serverIp.innerText = data.ip || "Servidor Apagado";
+            }
+
+            # Update CPU & RAM
+            const cpuEl = document.getElementById("cpu-usage");
+            const ramEl = document.getElementById("ram-usage");
+            if (cpuEl) cpuEl.innerText = (data.cpu_percent || 0) + "%";
+            if (ramEl) ramEl.innerText = (data.ram_used_gb || 0) + " / " + (data.ram_total_gb || 0) + " GB";
+
+            # Update Players Count
+            const playersEl = document.getElementById("players-count");
+            if (playersEl) playersEl.innerText = (data.players_online || 0) + " / " + (data.players_max || 0);
+
+            # Update Console Logs efficiently without unnecessary reflow
+            if (data.logs && Array.isArray(data.logs)) {
+                const newLogsStr = data.logs.join("\n");
+                if (newLogsStr !== lastLogsHash) {
+                    lastLogsHash = newLogsStr;
+                    const consoleEl = document.getElementById("console-logs");
+                    if (consoleEl) {
+                        const isScrolledBottom = (consoleEl.scrollHeight - consoleEl.scrollTop - consoleEl.clientHeight) < 50;
+                        consoleEl.innerText = newLogsStr;
+                        if (isScrolledBottom) {
+                            consoleEl.scrollTop = consoleEl.scrollHeight;
+                        }
+                    }
+                }
+            }
+        }
+    } catch(err) {
+        console.warn("Aviso fetch summary:", err);
+    } finally {
+        isFetchingSummary = false;
+    }
+}
+
+// Single timer every 4 seconds (0 lag, 0 request queueing)
+setInterval(fetchDashboardSummary, 4000);
+fetchDashboardSummary();
 
 </script>
 

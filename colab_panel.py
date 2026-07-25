@@ -1,4 +1,53 @@
 
+# ── UNIFIED ULTRA-FAST DASHBOARD SUMMARY ENDPOINT (ZERO-LAG CACHED) ──────────────
+last_summary_time = 0
+cached_summary_data = {}
+
+@app.route('/api/summary', methods=['GET'])
+def get_dashboard_summary():
+    global last_summary_time, cached_summary_data
+    now = time.time()
+    if now - last_summary_time < 2.5 and cached_summary_data:
+        return jsonify(cached_summary_data)
+
+    global server_status, active_server, mc_process
+    config = load_server_config()
+    active_srv = config.get("server_in_use", "")
+
+    if mc_process and mc_process.poll() is not None:
+        server_status = "offline"
+        mc_process = None
+
+    cpu = psutil.cpu_percent(interval=None)
+    ram = psutil.virtual_memory()
+    ram_used = round(ram.used / (1024**3), 1)
+    ram_total = round(ram.total / (1024**3), 1)
+
+    players_online = 0
+    players_max = 0
+    if server_status == "online":
+        players_online, players_max = query_mcstatus_fast()
+
+    raw_ip = get_tunnel_ip() if server_status == "online" else "Servidor Apagado"
+    lines = get_latest_logs_fast(max_lines=50)
+
+    cached_summary_data = {
+        "status": "ok",
+        "server_status": server_status,
+        "active_server": active_srv,
+        "ip": raw_ip,
+        "cpu_percent": cpu,
+        "ram_used_gb": ram_used,
+        "ram_total_gb": ram_total,
+        "players_online": players_online,
+        "players_max": players_max,
+        "logs": lines
+    }
+    last_summary_time = now
+    return jsonify(cached_summary_data)
+
+
+
 
 def get_latest_logs_fast(max_lines=80):
     import glob
